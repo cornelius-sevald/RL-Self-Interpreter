@@ -1,2 +1,2 @@
-prog = '((0.(ENTRY.(nil.(GOTO.1)))).((1.((FROM.0).(nil.EXIT))).nil))
+prog = '((init.(ENTRY.(nil.(GOTO.stop)))).((stop.((FROM.init).(nil.EXIT))).nil))
 input = 'nil
