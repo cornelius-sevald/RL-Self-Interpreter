@@ -2,7 +2,7 @@
 ->
 (prog output trace)
 with
-(BLOCK LABEL COMES STEPS JUMP BLOCKS SKCOLB STORE EROTS LABEL_TO_FIND VAR_TO_FIND LOOKUP EXPR EXPR_TYPE EXPR_RES FLAG FLAG_EVAL COMES_TYPE JUMP_TYPE PREV_LABEL trace_TMP)
+(BLOCK STEP LABEL COMES STEPS SPETS JUMP BLOCKS SKCOLB STORE EROTS LABEL_TO_FIND VAR_TO_FIND LOOKUP EXPR EXPR_TYPE EXPR_RES FLAG FLAG_EVAL COMES_TYPE JUMP_TYPE PREV_LABEL trace_TMP)
 
 // Meanings of variables:
 // - prog: input program
@@ -183,7 +183,7 @@ if COMES_TYPE = 'FROM goto do_from else do_fi
 do_entry:
 from do_come_from
   // nothing to do
-goto done_come_from1
+goto done_come_from
 
 do_from:
 from do_come_from1
@@ -192,7 +192,7 @@ from do_come_from1
 
   // Clear label of previous block.
   PREV_LABEL ^= tl COMES
-goto done_come_from
+goto done_come_from1
 
 // Evaluate conditional expression of fi
 do_fi:
@@ -243,26 +243,56 @@ done_fi:
 from do_fi4
   EXPR ^= hd (tl COMES)
   assert(EXPR = 'nil)
-goto done_come_from
-
-// Junction of `do_from` and `done_fi`
-done_come_from:
-fi COMES_TYPE = 'FROM from do_from else done_fi
-  COMES_TYPE ^= hd COMES
 goto done_come_from1
 
-// Junction of `do_entry` and `done_come_from`
+// Junction of `do_from` and `done_fi`
 done_come_from1:
-fi COMES = 'ENTRY from do_entry else done_come_from
+fi COMES_TYPE = 'FROM from do_from else done_fi
+  COMES_TYPE ^= hd COMES
+goto done_come_from
+
+// Junction of `do_entry` and `done_come_from1`
+done_come_from:
+fi COMES = 'ENTRY from do_entry else done_come_from1
 goto do_steps
 
 do_steps:
-from done_come_from1
-  // TODO: implement
-goto do_jump
+fi SPETS from done_step else done_come_from
+if STEPS goto do_steps1 else done_steps
+
+do_steps1:
+from do_steps
+  (STEP . STEPS) <- STEPS
+goto do_step
+
+do_step:
+from do_steps1
+//if STEP = 'SKIP goto do_skip else do_step1
+goto do_skip
+
+// nothing to do
+do_skip:
+from do_step
+goto done_step
+
+done_step:
+from do_skip
+  SPETS <- (STEP . SPETS)
+goto do_steps
+
+done_steps:
+fi STEPS from done_steps1 else do_steps
+if SPETS goto done_steps1 else do_jump
+
+// Restore SPETS back to STEPS
+done_steps1:
+from done_steps
+  (STEP . SPETS) <- SPETS
+  STEPS <- (STEP . STEPS)
+goto done_steps
 
 do_jump:
-from do_steps
+from done_steps
 if JUMP = 'EXIT goto do_exit else do_jump1
 
 do_jump1:
