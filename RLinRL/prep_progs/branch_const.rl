@@ -1,0 +1,2 @@
+prog = '((in.(ENTRY.(nil.(IF.((CONST.ruth).(left1.right1)))))).((left1.((FROM.in).(((ASSERT.(CONST.ruth)).nil).(GOTO.mid)))).((right1.((FROM.in).(((ASSERT.(UOP.(NOT.(CONST.ruth)))).nil).(GOTO.mid)))).((mid.((FI.((CONST.ruth).(left1.right1))).(nil.(IF.((CONST.nil).(left2.right2)))))).((left2.((FROM.mid).(((ASSERT.(CONST.nil)).nil).(GOTO.out)))).((right2.((FROM.mid).(((ASSERT.(UOP.(NOT.(CONST.nil)))).nil).(GOTO.out)))).((out.((FI.((CONST.nil).(left2.right2))).(nil.EXIT))).nil)))))))
+input = 'nil

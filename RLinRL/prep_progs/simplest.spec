@@ -1,2 +1,2 @@
 prog = '((init.(ENTRY.(nil.EXIT))).nil)
-input = 'nil
+store = 'nil
