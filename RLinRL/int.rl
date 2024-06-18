@@ -1,16 +1,23 @@
-(prog store)
+(prog input)
 ->
-(prog store)
+(prog output trace)
 with
-(BLOCK LABEL COMES STEPS JUMP BLOCKS SKCOLB LABEL_TO_FIND EXPR EXPR_TYPE RES FLAG FLAG_EVAL COMES_TYPE JUMP_TYPE PREV_LABEL)
+(BLOCK LABEL COMES STEPS JUMP BLOCKS SKCOLB STORE EROTS LABEL_TO_FIND VAR_TO_FIND LOOKUP EXPR EXPR_TYPE EXPR_RES FLAG FLAG_EVAL COMES_TYPE JUMP_TYPE PREV_LABEL trace_TMP)
 
 // Meanings of variables:
+// - prog: input program
+// - input: initial store
+// - output: final store
+// - trace: list of blocks visited (only for debugging)
 // - BLOCK: The current block. Is often 'nil as it is deconstructed into LABEL, COMES, STEPS & JUMP
 // - BLOCKS: List of blocks of the program.
 // - SKCOLB: List that temporarily hold blocks of the program in reverse order (hence the name)
+// - STORE: Current store of the program.
+// - EROTS: List that temporarily holds variable/value pairs from the store in reverse order (hence the name)
 // - LABEL_TO_FIND: When performing a non-exit jump, the label of the block to find.
+// - VAR_TO_FIND: When doing a variable lookup, the variable to find.
 // - EXPR: Current expression that is to be- or has just been evaluated.
-// - RES: The result of evaluating an expression
+// - EXPR_RES: The result of evaluating an expression
 // - FLAG: (BAD NAME) Value used to know where to jump to / come from when jumping to the same block from many sources.
 // - FLAG_EVAL: True if an expression has been evaluated and needs to be un-evaluated.
 
@@ -24,21 +31,61 @@ entry
   // Preprocessed programs always have the entry block first
   (BLOCK . BLOCKS) <- prog
   (LABEL . (COMES . (STEPS . JUMP))) <- BLOCK
+  STORE <- input
 goto main_loop
 
 main_loop:
 fi COMES = 'ENTRY from init else find_block2
+  // TODO: remove debug trace
+  trace_TMP ^= LABEL
+  trace <- (trace_TMP . trace)
 goto do_come_from
+
+// Look up VAR_TO_FIND,
+// storing the resulting variable/value pair in LOOKUP.
+do_lookup:
+from eval_var
+goto do_lookup1
+
+do_lookup1:
+fi EROTS from do_lookup2 else do_lookup
+  (LOOKUP . STORE) <- STORE
+if hd LOOKUP = VAR_TO_FIND goto done_lookup else do_lookup2
+
+do_lookup2:
+from do_lookup1
+  EROTS <- (LOOKUP . EROTS)
+goto do_lookup1
+
+done_lookup:
+from do_lookup1
+goto eval_var1
+
+// Restore LOOKUP back to store and EROTS back to STORE.
+undo_lookup:
+from eval_var1
+goto undo_lookup1
+
+undo_lookup1:
+fi hd LOOKUP = VAR_TO_FIND from undo_lookup else undo_lookup2
+  STORE <- (LOOKUP . STORE)
+if EROTS goto undo_lookup2 else undone_lookup
+
+undo_lookup2:
+from undo_lookup1
+  assert(EROTS)
+  (LOOKUP . EROTS) <- EROTS
+goto undo_lookup1
+
+undone_lookup:
+from undo_lookup1
+goto eval_var2
 
 // evaluate expression of `if` jump
 do_eval_if:
 fi FLAG_EVAL from do_if4 else do_if 
   assert(FLAG = 'nil)
   FLAG ^= 'IF
-  // Toggle eval flag.
-  // If it is false now then we are evaluating the expression,
-  // and if it is true then we are unevaluating the expression.
-  FLAG_EVAL ^= 'true
 goto do_eval_junction
 
 // evaluate expression of `fi` come-from
@@ -46,38 +93,60 @@ do_eval_fi:
 fi FLAG_EVAL from do_fi4 else do_fi 
   assert(FLAG = 'nil)
   FLAG ^= 'FI
-  // If it is false now then we are evaluating the expression,
-  // and if it is true then we are unevaluating the expression.
-  FLAG_EVAL ^= 'true
 goto do_eval_junction
 
 // Junction block of `do_eval_if` and `do_eval_fi`
 do_eval_junction:
 fi FLAG = 'IF from do_eval_if else do_eval_fi
-goto eval
+goto do_eval
 
 // Evaluate the expression in EXPR,
-// and store the result in RES.
-eval:
+// and store the result in EXPR_RES.
+do_eval:
 from do_eval_junction
   assert(EXPR_TYPE = 'nil)
   EXPR_TYPE ^= hd EXPR
+if EXPR_TYPE = 'CONST goto eval_const else do_eval1
+
+do_eval1:
+from do_eval
   // TODO: implement more expression types
-  assert(EXPR_TYPE = 'CONST)
-goto eval_const
+  assert(EXPR_TYPE = 'VAR)
+goto eval_var
 
 // Evaluate a constant
 eval_const:
-from eval
+from do_eval
   assert(EXPR_TYPE = 'CONST)
-  RES ^= tl EXPR
+  EXPR_RES ^= tl EXPR
+goto done_eval
+
+// Evaluate a variable
+eval_var:
+from do_eval1
+  assert(EXPR_TYPE = 'VAR)
+  VAR_TO_FIND ^= tl EXPR
+goto do_lookup
+
+eval_var1:
+from done_lookup
+  EXPR_RES ^= tl LOOKUP
+goto undo_lookup
+
+eval_var2:
+from undone_lookup
+  VAR_TO_FIND ^= tl EXPR
+goto done_eval1
+
+done_eval1:
+from eval_var2
+  // TODO: implement more expression types
+  assert(EXPR_TYPE = 'VAR)
 goto done_eval
 
 // cleanup after evaluating expression
 done_eval:
-from eval_const
-  // TODO: implement more expression types
-  assert(EXPR_TYPE = 'CONST)
+fi EXPR_TYPE = 'CONST from eval_const else done_eval1
   EXPR_TYPE ^= hd EXPR
 goto done_eval_junction
 
@@ -90,12 +159,16 @@ done_eval_if:
 from done_eval_junction
   assert(FLAG = 'IF)
   FLAG ^= 'IF
+  // Toggle eval flag.
+  FLAG_EVAL ^= 'true
 goto do_if1
 
 done_eval_fi:
 from done_eval_junction
   assert(FLAG = 'FI)
   FLAG ^= 'FI
+  // Toggle eval flag.
+  FLAG_EVAL ^= 'true
 goto do_fi1
 
 do_come_from:
@@ -132,13 +205,13 @@ goto do_eval_fi
 do_fi1:
 from done_eval_fi
   // Either we have just evaluated EXPR, or we have just unevaluated it.
-  // If FLAG_EVAL is true we have just evaluated EXPR, and we use RES to decide the branch.
+  // If FLAG_EVAL is true we have just evaluated EXPR, and we use EXPR_RES to decide the branch.
   // If FLAG_EVAL is false we instead go directly to do_if4.
 if FLAG_EVAL goto do_fi2 else do_fi4
 
 do_fi2:
 from do_fi1
-if RES goto do_fi_true else do_fi_false
+if EXPR_RES goto do_fi_true else do_fi_false
 
 // True case of fi-come-from
 do_fi_true:
@@ -155,7 +228,7 @@ from do_fi2
 goto do_fi3
 
 do_fi3:
-fi RES from do_fi_true else do_fi_false
+fi EXPR_RES from do_fi_true else do_fi_false
 goto do_fi4
 
 // After unevaluating EXPR, continue to execute the steps of the block
@@ -222,13 +295,13 @@ goto do_eval_if
 do_if1:
 from done_eval_if
   // Either we have just evaluated EXPR, or we have just unevaluated it.
-  // If FLAG_EVAL is true we have just evaluated EXPR, and we use RES to decide the branch.
+  // If FLAG_EVAL is true we have just evaluated EXPR, and we use EXPR_RES to decide the branch.
   // If FLAG_EVAL is false we instead go directly to do_if4.
 if FLAG_EVAL goto do_if2 else do_if4
 
 do_if2:
 from do_if1
-if RES goto do_if_true else do_if_false
+if EXPR_RES goto do_if_true else do_if_false
 
 // True case of if-jump
 do_if_true:
@@ -245,7 +318,7 @@ from do_if2
 goto do_if3
 
 do_if3:
-fi RES from do_if_true else do_if_false
+fi EXPR_RES from do_if_true else do_if_false
 goto do_if4
 
 do_if4:
@@ -335,4 +408,5 @@ if SKCOLB goto stop1 else stop2
 stop2:
 from stop1
   prog <- BLOCKS
+  output <- STORE
 exit

@@ -1,1 +1,1 @@
-c = 'ruth
+c = 'lin
