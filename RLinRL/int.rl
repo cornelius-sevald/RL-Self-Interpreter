@@ -1,8 +1,18 @@
-(prog input)
+(prog store)
 ->
-(BLOCK BLOCKS SKCOLB LABEL COMES STEPS JUMP LABEL_TO_FIND)
+(prog store)
 with
-(COMES_TYPE JUMP_TYPE PREV_LABEL)
+(BLOCK LABEL COMES STEPS JUMP BLOCKS SKCOLB LABEL_TO_FIND EXPR EXPR_TYPE RES FLAG FLAG_EVAL COMES_TYPE JUMP_TYPE PREV_LABEL)
+
+// Meanings of variables:
+// - BLOCK: The current block. Is often 'nil as it is deconstructed into LABEL, COMES, STEPS & JUMP
+// - BLOCKS: List of blocks of the program.
+// - SKCOLB: List that temporarily hold blocks of the program in reverse order (hence the name)
+// - LABEL_TO_FIND: When performing a non-exit jump, the label of the block to find.
+// - EXPR: Current expression that is to be- or has just been evaluated.
+// - RES: The result of evaluating an expression
+// - FLAG: (BAD NAME) Value used to know where to jump to / come from when jumping to the same block from many sources.
+// - FLAG_EVAL: True if an expression has been evaluated and needs to be un-evaluated.
 
 // READ:
 // Think I should let `SKCOLB` (terrible name) be non-nil,
@@ -18,34 +28,163 @@ goto main_loop
 
 main_loop:
 fi COMES = 'ENTRY from init else find_block2
-goto do_comes_from
+goto do_come_from
 
-do_comes_from:
+// evaluate expression of `if` jump
+do_eval_if:
+fi FLAG_EVAL from do_if4 else do_if 
+  assert(FLAG = 'nil)
+  FLAG ^= 'IF
+  // Toggle eval flag.
+  // If it is false now then we are evaluating the expression,
+  // and if it is true then we are unevaluating the expression.
+  FLAG_EVAL ^= 'true
+goto do_eval_junction
+
+// evaluate expression of `fi` come-from
+do_eval_fi:
+fi FLAG_EVAL from do_fi4 else do_fi 
+  assert(FLAG = 'nil)
+  FLAG ^= 'FI
+  // If it is false now then we are evaluating the expression,
+  // and if it is true then we are unevaluating the expression.
+  FLAG_EVAL ^= 'true
+goto do_eval_junction
+
+// Junction block of `do_eval_if` and `do_eval_fi`
+do_eval_junction:
+fi FLAG = 'IF from do_eval_if else do_eval_fi
+goto eval
+
+// Evaluate the expression in EXPR,
+// and store the result in RES.
+eval:
+from do_eval_junction
+  assert(EXPR_TYPE = 'nil)
+  EXPR_TYPE ^= hd EXPR
+  // TODO: implement more expression types
+  assert(EXPR_TYPE = 'CONST)
+goto eval_const
+
+// Evaluate a constant
+eval_const:
+from eval
+  assert(EXPR_TYPE = 'CONST)
+  RES ^= tl EXPR
+goto done_eval
+
+// cleanup after evaluating expression
+done_eval:
+from eval_const
+  // TODO: implement more expression types
+  assert(EXPR_TYPE = 'CONST)
+  EXPR_TYPE ^= hd EXPR
+goto done_eval_junction
+
+// Junction block of `done_eval_if` and `done_eval_fi`
+done_eval_junction:
+from done_eval
+if FLAG = 'IF goto done_eval_if else done_eval_fi
+
+done_eval_if:
+from done_eval_junction
+  assert(FLAG = 'IF)
+  FLAG ^= 'IF
+goto do_if1
+
+done_eval_fi:
+from done_eval_junction
+  assert(FLAG = 'FI)
+  FLAG ^= 'FI
+goto do_fi1
+
+do_come_from:
 from main_loop
-if COMES = 'ENTRY goto do_entry else do_comes_from1
+if COMES = 'ENTRY goto do_entry else do_come_from1
 
-do_comes_from1:
-from do_comes_from
+do_come_from1:
+from do_come_from
   COMES_TYPE ^= hd COMES
-  // TODO: implement more comes from
-goto do_from
+if COMES_TYPE = 'FROM goto do_from else do_fi
 
 do_entry:
-from do_comes_from
+from do_come_from
   // nothing to do
-goto do_steps
+goto done_come_from1
 
 do_from:
-from do_comes_from1
+from do_come_from1
   assert(COMES_TYPE = 'FROM)
   assert(PREV_LABEL = tl COMES)
 
-  COMES_TYPE ^= 'FROM
+  // Clear label of previous block.
   PREV_LABEL ^= tl COMES
+goto done_come_from
+
+// Evaluate conditional expression of fi
+do_fi:
+from do_come_from1
+  assert(COMES_TYPE = 'FI)
+  assert(EXPR = 'nil) 
+  EXPR ^= hd (tl COMES)
+goto do_eval_fi
+
+do_fi1:
+from done_eval_fi
+  // Either we have just evaluated EXPR, or we have just unevaluated it.
+  // If FLAG_EVAL is true we have just evaluated EXPR, and we use RES to decide the branch.
+  // If FLAG_EVAL is false we instead go directly to do_if4.
+if FLAG_EVAL goto do_fi2 else do_fi4
+
+do_fi2:
+from do_fi1
+if RES goto do_fi_true else do_fi_false
+
+// True case of fi-come-from
+do_fi_true:
+from do_fi2
+  // Clear label of previous block.
+  PREV_LABEL ^= hd (tl (tl COMES))
+goto do_fi3
+  
+// False case of fi-come-from
+do_fi_false:
+from do_fi2
+  // Clear label of previous block.
+  PREV_LABEL ^= tl (tl (tl COMES))
+goto do_fi3
+
+do_fi3:
+fi RES from do_fi_true else do_fi_false
+goto do_fi4
+
+// After unevaluating EXPR, continue to execute the steps of the block
+do_fi4:
+fi FLAG_EVAL from do_fi3 else do_fi1
+  // If FLAG_EVAL is true we unevaluate EXPR.
+  // Otherwise we are done with the comes-from.
+if FLAG_EVAL goto do_eval_fi else done_fi
+
+// Cleanup after fi comes-from
+done_fi:
+from do_fi4
+  EXPR ^= hd (tl COMES)
+  assert(EXPR = 'nil)
+goto done_come_from
+
+// Junction of `do_from` and `done_fi`
+done_come_from:
+fi COMES_TYPE = 'FROM from do_from else done_fi
+  COMES_TYPE ^= hd COMES
+goto done_come_from1
+
+// Junction of `do_entry` and `done_come_from`
+done_come_from1:
+fi COMES = 'ENTRY from do_entry else done_come_from
 goto do_steps
 
 do_steps:
-fi COMES = 'ENTRY from do_entry else do_from
+from done_come_from1
   // TODO: implement
 goto do_jump
 
@@ -56,8 +195,7 @@ if JUMP = 'EXIT goto do_exit else do_jump1
 do_jump1:
 from do_jump
   JUMP_TYPE ^= hd JUMP
-  // TODO: implement more jump types
-goto do_goto
+if JUMP_TYPE = 'GOTO goto do_goto else do_if
 
 do_exit:
 from do_jump
@@ -69,15 +207,70 @@ from do_jump1
   assert(JUMP_TYPE = 'GOTO)
   assert(LABEL_TO_FIND = 'nil)
 
-  JUMP_TYPE ^= 'GOTO
   // save label of new block to find
   LABEL_TO_FIND ^= tl JUMP
+goto done_jump
+
+// Evaluate condition expression of if
+do_if:
+from do_jump1
+  assert(JUMP_TYPE = 'IF)
+  assert(EXPR = 'nil)
+  EXPR ^= hd (tl JUMP)
+goto do_eval_if
+
+do_if1:
+from done_eval_if
+  // Either we have just evaluated EXPR, or we have just unevaluated it.
+  // If FLAG_EVAL is true we have just evaluated EXPR, and we use RES to decide the branch.
+  // If FLAG_EVAL is false we instead go directly to do_if4.
+if FLAG_EVAL goto do_if2 else do_if4
+
+do_if2:
+from do_if1
+if RES goto do_if_true else do_if_false
+
+// True case of if-jump
+do_if_true:
+from do_if2
+  // save label of new block to find
+  LABEL_TO_FIND ^= hd (tl (tl JUMP))
+goto do_if3
+
+// False case of if-jump
+do_if_false:
+from do_if2
+  // save label of new block to find
+  LABEL_TO_FIND ^= tl (tl (tl JUMP))
+goto do_if3
+
+do_if3:
+fi RES from do_if_true else do_if_false
+goto do_if4
+
+do_if4:
+fi FLAG_EVAL from do_if3 else do_if1
+  // If FLAG_EVAL is true we unevaluate EXPR.
+  // Otherwise we are done with the jump.
+if FLAG_EVAL goto do_eval_if else done_if
+
+// Cleanup after if jump
+done_if:
+from do_if4
+  EXPR ^= hd (tl JUMP)
+  assert(EXPR = 'nil)
+goto done_jump
+
+// Junction of `do_goto` and `done_if`
+done_jump:
+fi JUMP_TYPE = 'GOTO from do_goto else done_if
+  JUMP_TYPE ^= hd JUMP
 goto restore_block
 
 // put current block to the head of `BLOCKS`.
 // then restore blocks from `SKCOLB` back to `BLOCKS`
 restore_block:
-from do_goto
+from done_jump
   // save copy of `LABEL`
   // will be cleared later from next blocks `from`
   PREV_LABEL ^= LABEL
@@ -141,4 +334,5 @@ if SKCOLB goto stop1 else stop2
 
 stop2:
 from stop1
+  prog <- BLOCKS
 exit
