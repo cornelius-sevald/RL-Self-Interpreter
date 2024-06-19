@@ -2,7 +2,7 @@
 ->
 (prog output trace)
 with
-(BLOCK STEP STEP_TYPE EXPR EXPR_TYPE EXPR_RES COMES_TYPE JUMP_TYPE PREV_LABEL FLAG FLAG_EVAL LABEL COMES STEPS SPETS JUMP BLOCKS SKCOLB STORE EROTS LABEL_TO_FIND VAR_TO_FIND UPDATE_TYPE UPDATE_VAR LOOKUP VAR VAL trace_TMP)
+(BLOCK STEP STEP_TYPE EXPR EXPR_TYPE EXPR_RES COMES_TYPE JUMP_TYPE PREV_LABEL FLAG FLAG_EVAL LABEL COMES STEPS SPETS JUMP BLOCKS SKCOLB STORE EROTS LABEL_TO_FIND VAR_TO_FIND UPDATE_TYPE UPDATE_VAR LOOKUP VAR VAL OP STACK TMP trace_TMP)
 
 // Meanings of variables:
 // - prog: input program
@@ -163,29 +163,43 @@ fi FLAG_EVAL from done_update1 else do_update
   FLAG <- ('UPDATE . FLAG)
 goto do_eval_junction1
 
-// junction block
+// evaluate operand of a unary operator
+do_eval_operand:
+fi FLAG_EVAL from done_eval_unop1 else do_eval_unop
+  // preprocessing guarantees that an operator is a variable
+  //assert(hd EXPR = 'VAR)
+  FLAG <- ('OPERAND . FLAG)
+goto do_eval_junction2
+
 do_eval_junction:
 fi hd FLAG = 'IF from do_eval_if else do_eval_fi
 goto do_eval_junction1
 
-// junction block
 do_eval_junction1:
 fi hd FLAG = 'UPDATE from do_eval_update else do_eval_junction
+goto do_eval_junction2
+
+do_eval_junction2:
+fi hd FLAG = 'OPERAND from do_eval_operand else do_eval_junction1
 goto do_eval
 
 // Evaluate the expression in EXPR,
 // and store the result in EXPR_RES.
 do_eval:
-from do_eval_junction1
+from do_eval_junction2
   assert(EXPR_TYPE = 'nil)
   EXPR_TYPE ^= hd EXPR
 if EXPR_TYPE = 'CONST goto eval_const else do_eval1
 
 do_eval1:
 from do_eval
+if EXPR_TYPE = 'VAR goto eval_var else do_eval2
+
+do_eval2:
+from do_eval1
   // TODO: implement more expression types
-  assert(EXPR_TYPE = 'VAR)
-goto eval_var
+  assert(EXPR_TYPE = 'UNOP)
+goto do_eval_unop
 
 // Evaluate a constant
 eval_const:
@@ -209,27 +223,131 @@ eval_var2:
 from undone_lookup_eval
 goto done_eval1
 
-done_eval1:
-from eval_var2
+// Evaluate unary operator
+do_eval_unop:
+from do_eval2
+  EXPR_TYPE ^= 'UNOP
+  // Extract operator and inner expression
+  (EXPR_TYPE . (OP . EXPR)) <- EXPR
+
+  // temporarily clear expression type
+  EXPR_TYPE ^= 'UNOP
+
+  // we might be unevaluating this expression,
+  // but locally we wan't it to look like we are evaluating it,
+  // so we put the flag on the stack
+  STACK <- (FLAG_EVAL . STACK)
+
+  // also save the current expression result on the stack,
+  // so that in case we are unevaluating it we can still evaluate the sub-expression
+  STACK <- (EXPR_RES . STACK)
+
+  // finally, save the operator in the stack in case it is used by sub-expressions
+  STACK <- (OP . STACK)
+// Recursively evaluate inner expression
+goto do_eval_operand
+
+do_eval_unop1:
+from done_eval_operand
+  // Either we have just evaluated EXPR, or we have just unevaluated it.
+  // If FLAG_EVAL is true we have just evaluated EXPR, and we evaluate the unop
+  // If FLAG_EVAL is false we instead go directly to done_eval_unop1.
+if FLAG_EVAL goto do_eval_unop2 else done_eval_unop1
+
+// Look at operator and apply it to EXPR_RES,
+// storing the result (temporarily) in TMP
+do_eval_unop2:
+from do_eval_unop1
+  (OP . STACK) <- STACK
+
+  // The result will be stored in TMP,
+  // so make sure it is clear
+  assert(TMP = 'nil)
+  (TMP . STACK) <- STACK
+
+  // TODO: implement more unary operators
+  assert(OP = 'NOT)
+goto eval_not
+
+// Evaluate NOT expression, storing the result in TMP
+eval_not:
+from do_eval_unop2
+  TMP ^= ! EXPR_RES
+goto done_eval_unop2
+
+done_eval_unop2:
+from eval_not
+  // TODO: implement more unary operators
+  assert(OP = 'NOT)
+
+  // put result on the stack
+  STACK <- (TMP . STACK)
+  // put operator back on the stack
+  STACK <- (OP . STACK)
+goto done_eval_unop1
+
+// Unevaluate operand of unary expression
+done_eval_unop1:
+fi FLAG_EVAL from done_eval_unop2 else do_eval_unop1
+  // If FLAG_EVAL is true we unevaluate EXPR.
+  // Otherwise we have already unevaluated it, so we move continue.
+if FLAG_EVAL goto do_eval_operand else done_eval_unop
+
+done_eval_unop:
+from done_eval_unop1
+  // Restore original expression
+  (OP . STACK) <- STACK
+  EXPR_TYPE ^= 'UNOP
+  EXPR <- (EXPR_TYPE . (OP . EXPR))
+
+  // Restore expression type
+  EXPR_TYPE ^= 'UNOP
+
+  // Save result
+  (EXPR_RES . STACK) <- STACK
+
+  // restore old eval flag
+  (FLAG_EVAL . STACK) <- STACK
+goto done_eval2
+
+done_eval2:
+from done_eval_unop
   // TODO: implement more expression types
-  assert(EXPR_TYPE = 'VAR)
+  assert(EXPR_TYPE = 'UNOP)
+goto done_eval1
+
+done_eval1:
+fi EXPR_TYPE = 'VAR from eval_var2 else done_eval2
 goto done_eval
 
 // cleanup after evaluating expression
 done_eval:
 fi EXPR_TYPE = 'CONST from eval_const else done_eval1
   EXPR_TYPE ^= hd EXPR
-goto done_eval_junction1
+goto done_eval_junction2
+
+// junction block
+done_eval_junction2:
+from done_eval
+if hd FLAG = 'OPERAND goto done_eval_operand else done_eval_junction1
 
 // junction block
 done_eval_junction1:
-from done_eval
+from done_eval_junction2
 if hd FLAG = 'UPDATE goto done_eval_update else done_eval_junction
 
 // junction block
 done_eval_junction:
 from done_eval_junction1
 if hd FLAG = 'IF goto done_eval_if else done_eval_fi
+
+done_eval_operand:
+from done_eval_junction2
+  assert(hd FLAG = 'OPERAND)
+  ('OPERAND . FLAG) <- FLAG
+  // Toggle eval flag.
+  FLAG_EVAL ^= 'true
+goto do_eval_unop1
 
 done_eval_update:
 from done_eval_junction1
