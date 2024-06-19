@@ -2,7 +2,7 @@
 ->
 (prog output trace)
 with
-(BLOCK STEP LABEL COMES STEPS SPETS JUMP BLOCKS SKCOLB STORE EROTS LABEL_TO_FIND VAR_TO_FIND LOOKUP EXPR EXPR_TYPE EXPR_RES FLAG FLAG_EVAL COMES_TYPE JUMP_TYPE PREV_LABEL trace_TMP)
+(BLOCK STEP STEP_TYPE EXPR EXPR_TYPE EXPR_RES COMES_TYPE JUMP_TYPE PREV_LABEL FLAG FLAG_EVAL LABEL COMES STEPS SPETS JUMP BLOCKS SKCOLB STORE EROTS LABEL_TO_FIND VAR_TO_FIND UPDATE_TYPE UPDATE_VAR LOOKUP VAR VAL trace_TMP)
 
 // Meanings of variables:
 // - prog: input program
@@ -18,7 +18,7 @@ with
 // - VAR_TO_FIND: When doing a variable lookup, the variable to find.
 // - EXPR: Current expression that is to be- or has just been evaluated.
 // - EXPR_RES: The result of evaluating an expression
-// - FLAG: (BAD NAME) Value used to know where to jump to / come from when jumping to the same block from many sources.
+// - FLAG: Value used to know where to jump to / come from when jumping to the same block from many sources.
 // - FLAG_EVAL: True if an expression has been evaluated and needs to be un-evaluated.
 
 // READ:
@@ -41,10 +41,26 @@ fi COMES = 'ENTRY from init else find_block2
   trace <- (trace_TMP . trace)
 goto do_come_from
 
+// lookup variable of expression
+do_lookup_eval:
+from eval_var
+  assert(VAR_TO_FIND = 'nil)
+  VAR_TO_FIND ^= tl EXPR
+  FLAG <- ('EVAL . FLAG)
+goto do_lookup
+
+// lookup variable of update step
+do_lookup_update:
+from do_update2
+  assert(VAR_TO_FIND = 'nil)
+  VAR_TO_FIND ^= hd (tl (tl STEP))
+  FLAG <- ('UPDATE . FLAG)
+goto do_lookup
+
 // Look up VAR_TO_FIND,
 // storing the resulting variable/value pair in LOOKUP.
 do_lookup:
-from eval_var
+fi hd FLAG = 'EVAL from do_lookup_eval else do_lookup_update
 goto do_lookup1
 
 do_lookup1:
@@ -59,11 +75,43 @@ goto do_lookup1
 
 done_lookup:
 from do_lookup1
+if hd FLAG = 'EVAL goto done_lookup_eval else done_lookup_update
+
+// return to update step after lookup
+done_lookup_update:
+from done_lookup
+  ('UPDATE . FLAG) <- FLAG
+  VAR_TO_FIND ^= hd (tl (tl STEP))
+  assert(VAR_TO_FIND = 'nil)
+goto do_update3
+
+// return to evaluating variable expression after lookup
+done_lookup_eval:
+from done_lookup
+  ('EVAL . FLAG) <- FLAG
+  VAR_TO_FIND ^= tl EXPR
+  assert(VAR_TO_FIND = 'nil)
 goto eval_var1
+
+// undo lookup variable of expression
+undo_lookup_eval:
+from eval_var1
+  assert(VAR_TO_FIND = 'nil)
+  VAR_TO_FIND ^= tl EXPR
+  FLAG <- ('EVAL . FLAG)
+goto undo_lookup
+
+// undo lookup variable of update step
+undo_lookup_update:
+from done_update3
+  assert(VAR_TO_FIND = 'nil)
+  VAR_TO_FIND ^= UPDATE_VAR
+  FLAG <- ('UPDATE . FLAG)
+goto undo_lookup
 
 // Restore LOOKUP back to store and EROTS back to STORE.
 undo_lookup:
-from eval_var1
+fi hd FLAG = 'EVAL from undo_lookup_eval else undo_lookup_update
 goto undo_lookup1
 
 undo_lookup1:
@@ -79,31 +127,56 @@ goto undo_lookup1
 
 undone_lookup:
 from undo_lookup1
+if hd FLAG = 'EVAL goto undone_lookup_eval else undone_lookup_update
+
+// return to update step after undoing lookup
+undone_lookup_update:
+from undone_lookup
+  ('UPDATE . FLAG) <- FLAG
+  VAR_TO_FIND ^= UPDATE_VAR
+  assert(VAR_TO_FIND = 'nil)
+goto done_update2
+
+// return to evaluating variable expression after undoing lookup
+undone_lookup_eval:
+from undone_lookup
+  ('EVAL . FLAG) <- FLAG
+  VAR_TO_FIND ^= tl EXPR
+  assert(VAR_TO_FIND = 'nil)
 goto eval_var2
 
-// evaluate expression of `if` jump
+// evaluate expression of "if" jump
 do_eval_if:
 fi FLAG_EVAL from do_if4 else do_if 
-  assert(FLAG = 'nil)
-  FLAG ^= 'IF
+  FLAG <- ('IF . FLAG)
 goto do_eval_junction
 
-// evaluate expression of `fi` come-from
+// evaluate expression of "fi" come-from
 do_eval_fi:
 fi FLAG_EVAL from do_fi4 else do_fi 
-  assert(FLAG = 'nil)
-  FLAG ^= 'FI
+  FLAG <- ('FI . FLAG)
 goto do_eval_junction
 
-// Junction block of `do_eval_if` and `do_eval_fi`
+// evaluate expression of "update" step
+do_eval_update:
+fi FLAG_EVAL from done_update1 else do_update 
+  FLAG <- ('UPDATE . FLAG)
+goto do_eval_junction1
+
+// junction block
 do_eval_junction:
-fi FLAG = 'IF from do_eval_if else do_eval_fi
+fi hd FLAG = 'IF from do_eval_if else do_eval_fi
+goto do_eval_junction1
+
+// junction block
+do_eval_junction1:
+fi hd FLAG = 'UPDATE from do_eval_update else do_eval_junction
 goto do_eval
 
 // Evaluate the expression in EXPR,
 // and store the result in EXPR_RES.
 do_eval:
-from do_eval_junction
+from do_eval_junction1
   assert(EXPR_TYPE = 'nil)
   EXPR_TYPE ^= hd EXPR
 if EXPR_TYPE = 'CONST goto eval_const else do_eval1
@@ -125,17 +198,15 @@ goto done_eval
 eval_var:
 from do_eval1
   assert(EXPR_TYPE = 'VAR)
-  VAR_TO_FIND ^= tl EXPR
-goto do_lookup
+goto do_lookup_eval
 
 eval_var1:
-from done_lookup
+from done_lookup_eval
   EXPR_RES ^= tl LOOKUP
-goto undo_lookup
+goto undo_lookup_eval
 
 eval_var2:
-from undone_lookup
-  VAR_TO_FIND ^= tl EXPR
+from undone_lookup_eval
 goto done_eval1
 
 done_eval1:
@@ -148,25 +219,38 @@ goto done_eval
 done_eval:
 fi EXPR_TYPE = 'CONST from eval_const else done_eval1
   EXPR_TYPE ^= hd EXPR
-goto done_eval_junction
+goto done_eval_junction1
 
-// Junction block of `done_eval_if` and `done_eval_fi`
-done_eval_junction:
+// junction block
+done_eval_junction1:
 from done_eval
-if FLAG = 'IF goto done_eval_if else done_eval_fi
+if hd FLAG = 'UPDATE goto done_eval_update else done_eval_junction
+
+// junction block
+done_eval_junction:
+from done_eval_junction1
+if hd FLAG = 'IF goto done_eval_if else done_eval_fi
+
+done_eval_update:
+from done_eval_junction1
+  assert(hd FLAG = 'UPDATE)
+  ('UPDATE . FLAG) <- FLAG
+  // Toggle eval flag.
+  FLAG_EVAL ^= 'true
+goto do_update1
 
 done_eval_if:
 from done_eval_junction
-  assert(FLAG = 'IF)
-  FLAG ^= 'IF
+  assert(hd FLAG = 'IF)
+  ('IF . FLAG) <- FLAG
   // Toggle eval flag.
   FLAG_EVAL ^= 'true
 goto do_if1
 
 done_eval_fi:
 from done_eval_junction
-  assert(FLAG = 'FI)
-  FLAG ^= 'FI
+  assert(hd FLAG = 'FI)
+  ('FI . FLAG) <- FLAG
   // Toggle eval flag.
   FLAG_EVAL ^= 'true
 goto do_fi1
@@ -258,34 +342,157 @@ goto do_steps
 
 do_steps:
 fi SPETS from done_step else done_come_from
-if STEPS goto do_steps1 else done_steps
+if STEPS goto do_steps_loop else done_steps
 
-do_steps1:
+do_steps_loop:
 from do_steps
   (STEP . STEPS) <- STEPS
 goto do_step
 
 do_step:
-from do_steps1
-//if STEP = 'SKIP goto do_skip else do_step1
-goto do_skip
+from do_steps_loop
+if STEP = 'SKIP goto do_skip else do_step1
+
+do_step1:
+from do_step
+  STEP_TYPE ^= hd STEP
+if STEP_TYPE = 'ASSERT goto do_assert else do_step2
+
+do_step2:
+from do_step1
+if STEP_TYPE = 'REPLACE goto do_replace else do_step3
+
+do_step3:
+from do_step2
+  assert(STEP_TYPE = 'UPDATE)
+goto do_update
 
 // nothing to do
 do_skip:
 from do_step
 goto done_step
 
+do_assert:
+from do_step1
+  // TODO: implement assert
+  assert(!'not_implemented)
+goto done_step1
+
+do_replace:
+from do_step2
+  // TODO: implement replace
+  assert(!'not_implemented)
+goto done_step2
+
+do_update:
+from do_step3
+  assert(EXPR        = 'nil)
+  assert(UPDATE_VAR  = 'nil)
+  assert(UPDATE_TYPE = 'nil)
+  UPDATE_TYPE ^= hd (tl STEP)
+  UPDATE_VAR ^= hd (tl (tl STEP))
+  EXPR ^= tl (tl (tl STEP))
+goto do_eval_update
+
+do_update1:
+from done_eval_update
+  // Either we have just evaluated EXPR, or we have just unevaluated it.
+  // If FLAG_EVAL is true we have just evaluated EXPR,
+  //   so we lookup the variable and update it.
+  // If FLAG_EVAL is false we instead go directly to do_update?.
+if FLAG_EVAL goto do_update2 else done_update1
+
+do_update2:
+from do_update1
+goto do_lookup_update
+
+do_update3:
+from done_lookup_update
+  (VAR . VAL) <- LOOKUP
+if UPDATE_TYPE = 'ADD goto do_update_add else do_update4
+
+do_update4:
+from do_update3
+if UPDATE_TYPE = 'SUB goto do_update_sub else do_update5
+
+do_update5:
+from do_update4
+  assert(UPDATE_TYPE = 'XOR)
+goto do_update_xor
+
+do_update_add:
+from do_update3
+  VAL += EXPR_RES
+goto done_update3
+
+do_update_sub:
+from do_update4
+  VAL -= EXPR_RES
+goto done_update4
+
+do_update_xor:
+from do_update5
+  VAL ^= EXPR_RES
+goto done_update5
+
+done_update5:
+from do_update_xor
+goto done_update4
+
+done_update4:
+fi UPDATE_TYPE = 'SUB from do_update_sub else done_update5
+goto done_update3
+
+done_update3:
+fi UPDATE_TYPE = 'ADD from do_update_add else done_update4
+  LOOKUP <- (VAR . VAL)
+goto undo_lookup_update
+
+done_update2:
+from undone_lookup_update
+goto done_update1
+
+done_update1:
+fi FLAG_EVAL from done_update2 else do_update1
+  // If FLAG_EVAL is true we unevaluate EXPR.
+  // Otherwise we are done with the update step.
+if FLAG_EVAL goto do_eval_update else done_update
+
+done_update:
+from done_update1
+  UPDATE_TYPE ^= hd (tl STEP)
+  UPDATE_VAR ^= hd (tl (tl STEP))
+  EXPR ^= tl (tl (tl STEP))
+  assert(EXPR        = 'nil)
+  assert(UPDATE_VAR  = 'nil)
+  assert(UPDATE_TYPE = 'nil)
+goto done_step3
+
+done_step3:
+from done_update
+  assert(STEP_TYPE = 'UPDATE)
+goto done_step2
+
+done_step2:
+fi STEP_TYPE = 'REPLACE from do_replace else done_step3
+goto done_step1
+
+done_step1:
+fi STEP_TYPE = 'ASSERT from do_assert else done_step2
+  STEP_TYPE ^= hd STEP
+goto done_step
+
 done_step:
-from do_skip
+fi STEP = 'SKIP from do_skip else done_step1
   SPETS <- (STEP . SPETS)
 goto do_steps
 
 done_steps:
-fi STEPS from done_steps1 else do_steps
-if SPETS goto done_steps1 else do_jump
+fi STEPS from done_steps_loop else do_steps
+if SPETS goto done_steps_loop else do_jump
 
 // Restore SPETS back to STEPS
-done_steps1:
+done_steps_loop:
 from done_steps
   (STEP . SPETS) <- SPETS
   STEPS <- (STEP . STEPS)

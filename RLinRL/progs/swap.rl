@@ -1,7 +1,6 @@
-(a b) -> (a b) with (c d)
+(a b) -> (a b)
 
 init:
 entry
-  (c . d) <- (a . b)
-  (b . a) <- (c . d)
+  (b . a) <- (a . b)
 exit
