@@ -264,10 +264,16 @@ from do_eval_unop1
   // so make sure it is clear
   assert(TMP = 'nil)
   (TMP . STACK) <- STACK
+if OP = 'NOT goto eval_not else do_eval_unop3
 
-  // TODO: implement more unary operators
-  assert(OP = 'NOT)
-goto eval_not
+do_eval_unop3:
+from do_eval_unop2
+if OP = 'HD goto eval_hd else do_eval_unop4
+
+do_eval_unop4:
+from do_eval_unop3
+  assert(OP = 'TL)
+goto eval_tl
 
 // Evaluate NOT expression, storing the result in TMP
 eval_not:
@@ -275,11 +281,29 @@ from do_eval_unop2
   TMP ^= ! EXPR_RES
 goto done_eval_unop2
 
-done_eval_unop2:
-from eval_not
-  // TODO: implement more unary operators
-  assert(OP = 'NOT)
+// Evaluate HD (head) expression, storing the result in TMP
+eval_hd:
+from do_eval_unop3
+  TMP ^= hd EXPR_RES
+goto done_eval_unop3
 
+// Evaluate TL (tail) expression, storing the result in TMP
+eval_tl:
+from do_eval_unop4
+  TMP ^= tl EXPR_RES
+goto done_eval_unop4
+
+done_eval_unop4:
+from eval_tl
+  assert(OP = 'TL)
+goto done_eval_unop3
+
+done_eval_unop3:
+fi OP = 'HD from eval_hd else done_eval_unop4
+goto done_eval_unop2
+
+done_eval_unop2:
+fi OP = 'NOT from eval_not else done_eval_unop3
   // put result on the stack
   STACK <- (TMP . STACK)
   // put operator back on the stack
@@ -290,7 +314,7 @@ goto done_eval_unop1
 done_eval_unop1:
 fi FLAG_EVAL from done_eval_unop2 else do_eval_unop1
   // If FLAG_EVAL is true we unevaluate EXPR.
-  // Otherwise we have already unevaluated it, so we move continue.
+  // Otherwise we have already unevaluated it, so we continue.
 if FLAG_EVAL goto do_eval_operand else done_eval_unop
 
 done_eval_unop:
