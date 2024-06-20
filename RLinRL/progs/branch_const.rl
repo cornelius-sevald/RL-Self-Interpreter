@@ -2,20 +2,20 @@
 
 in:
 entry
-if 'ruth goto left1 else right1
+if 'yes goto left1 else right1
 
 left1:
 from in
-  assert('ruth)
+  assert('yes)
 goto mid
 
 right1:
 from in
-  assert(! 'ruth)
+  assert(! 'yes)
 goto mid
 
 mid:
-fi 'ruth from left1 else right1
+fi 'yes from left1 else right1
 if 'nil goto left2 else right2
 
 left2:

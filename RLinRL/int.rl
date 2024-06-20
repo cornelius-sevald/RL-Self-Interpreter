@@ -1,14 +1,13 @@
 (prog input)
 ->
-(prog output trace)
+(prog output)
 with
-(BLOCK STEP STEP_TYPE EXPR EXPR_TYPE EXPR_RES COMES_TYPE JUMP_TYPE PREV_LABEL FLAG FLAG_EVAL LABEL COMES STEPS SPETS JUMP BLOCKS SKCOLB STORE EROTS LABEL_TO_FIND VAR_TO_FIND UPDATE_TYPE UPDATE_VAR LOOKUP VAR VAL EXPR_L EXPR_R EXPR_RES_L EXPR_RES_R OP STACK TMP trace_TMP)
+(BLOCK STEP STEP_TYPE EXPR EXPR_TYPE EXPR_RES COMES_TYPE JUMP_TYPE PREV_LABEL FLAG FLAG_EVAL LABEL COMES STEPS SPETS JUMP BLOCKS SKCOLB STORE EROTS LABEL_TO_FIND VAR_TO_FIND UPDATE_TYPE UPDATE_VAR LOOKUP VAR VAL EXPR_L EXPR_R EXPR_RES_L EXPR_RES_R OP STACK TMP)
 
 // Meanings of variables:
 // - prog: input program
 // - input: initial store
 // - output: final store
-// - trace: list of blocks visited (only for debugging)
 // - BLOCK: The current block. Is often 'nil as it is deconstructed into LABEL, COMES, STEPS & JUMP
 // - BLOCKS: List of blocks of the program.
 // - SKCOLB: List that temporarily hold blocks of the program in reverse order (hence the name)
@@ -36,9 +35,6 @@ goto main_loop
 
 main_loop:
 fi COMES = 'ENTRY from init else find_block2
-  // TODO: remove debug trace
-  trace_TMP ^= LABEL
-  trace <- (trace_TMP . trace)
 goto do_come_from
 
 // lookup variable of expression
