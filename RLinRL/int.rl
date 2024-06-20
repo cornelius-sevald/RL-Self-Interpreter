@@ -2,7 +2,7 @@
 ->
 (prog output trace)
 with
-(BLOCK STEP STEP_TYPE EXPR EXPR_TYPE EXPR_RES COMES_TYPE JUMP_TYPE PREV_LABEL FLAG FLAG_EVAL LABEL COMES STEPS SPETS JUMP BLOCKS SKCOLB STORE EROTS LABEL_TO_FIND VAR_TO_FIND UPDATE_TYPE UPDATE_VAR LOOKUP VAR VAL OP STACK TMP trace_TMP)
+(BLOCK STEP STEP_TYPE EXPR EXPR_TYPE EXPR_RES COMES_TYPE JUMP_TYPE PREV_LABEL FLAG FLAG_EVAL LABEL COMES STEPS SPETS JUMP BLOCKS SKCOLB STORE EROTS LABEL_TO_FIND VAR_TO_FIND UPDATE_TYPE UPDATE_VAR LOOKUP VAR VAL EXPR_L EXPR_R EXPR_RES_L EXPR_RES_R OP STACK TMP trace_TMP)
 
 // Meanings of variables:
 // - prog: input program
@@ -166,10 +166,20 @@ goto do_eval_junction1
 // evaluate operand of a unary operator
 do_eval_operand:
 fi FLAG_EVAL from done_eval_unop1 else do_eval_unop
-  // preprocessing guarantees that an operator is a variable
-  //assert(hd EXPR = 'VAR)
   FLAG <- ('OPERAND . FLAG)
 goto do_eval_junction2
+
+// evaluate left operand of a binary operator
+do_eval_operand_left:
+fi FLAG_EVAL from done_eval_binop1 else do_eval_binop
+  FLAG <- ('OPERAND_L . FLAG)
+goto do_eval_junction3
+
+// evaluate right operand of a binary operator
+do_eval_operand_right:
+fi FLAG_EVAL from done_eval_binop3 else do_eval_binop2
+  FLAG <- ('OPERAND_R . FLAG)
+goto do_eval_junction4
 
 do_eval_junction:
 fi hd FLAG = 'IF from do_eval_if else do_eval_fi
@@ -181,12 +191,20 @@ goto do_eval_junction2
 
 do_eval_junction2:
 fi hd FLAG = 'OPERAND from do_eval_operand else do_eval_junction1
+goto do_eval_junction3
+
+do_eval_junction3:
+fi hd FLAG = 'OPERAND_L from do_eval_operand_left else do_eval_junction2
+goto do_eval_junction4
+
+do_eval_junction4:
+fi hd FLAG = 'OPERAND_R from do_eval_operand_right else do_eval_junction3
 goto do_eval
 
 // Evaluate the expression in EXPR,
 // and store the result in EXPR_RES.
 do_eval:
-from do_eval_junction2
+from do_eval_junction4
   assert(EXPR_TYPE = 'nil)
   EXPR_TYPE ^= hd EXPR
 if EXPR_TYPE = 'CONST goto eval_const else do_eval1
@@ -197,9 +215,12 @@ if EXPR_TYPE = 'VAR goto eval_var else do_eval2
 
 do_eval2:
 from do_eval1
-  // TODO: implement more expression types
-  assert(EXPR_TYPE = 'UNOP)
-goto do_eval_unop
+if EXPR_TYPE = 'UNOP goto do_eval_unop else do_eval3
+
+do_eval3:
+from do_eval2
+  assert(EXPR_TYPE = 'BINOP)
+goto do_eval_binop
 
 // Evaluate a constant
 eval_const:
@@ -242,9 +263,9 @@ from do_eval2
   // so that in case we are unevaluating it we can still evaluate the sub-expression
   STACK <- (EXPR_RES . STACK)
 
-  // finally, save the operator in the stack in case it is used by sub-expressions
+  // finally, save the operator on the stack in case it is used by sub-expressions
   STACK <- (OP . STACK)
-// Recursively evaluate inner expression
+// Recursively evaluate inner sub-expression
 goto do_eval_operand
 
 do_eval_unop1:
@@ -320,8 +341,8 @@ if FLAG_EVAL goto do_eval_operand else done_eval_unop
 done_eval_unop:
 from done_eval_unop1
   // Restore original expression
-  (OP . STACK) <- STACK
   EXPR_TYPE ^= 'UNOP
+  (OP . STACK) <- STACK
   EXPR <- (EXPR_TYPE . (OP . EXPR))
 
   // Restore expression type
@@ -334,10 +355,319 @@ from done_eval_unop1
   (FLAG_EVAL . STACK) <- STACK
 goto done_eval2
 
+// Evaluate binary operator
+do_eval_binop:
+from do_eval3
+  EXPR_TYPE ^= 'BINOP
+  // Extract operator and inner expressions
+  (EXPR_TYPE . (OP . (EXPR_L . EXPR_R))) <- EXPR
+
+  // clear expression type while evaluating inner expressions
+  EXPR_TYPE ^= 'BINOP
+
+  // we might be unevaluating this expression,
+  // but locally we wan't it to look like we are evaluating it,
+  // so we put the flag on the stack
+  STACK <- (FLAG_EVAL . STACK)
+
+  // initially evaluate left sub-expression
+  EXPR ^= EXPR_L
+  // and save the sub-expressions on the stack
+  STACK <- ((EXPR_L . EXPR_R) . STACK)
+
+  // also save the current expression result on the stack,
+  // so that in case we are unevaluating it we can still evaluate the sub-expression
+  STACK <- (EXPR_RES . STACK)
+
+  // finally, save the operator on the stack in case it is used by sub-expressions
+  STACK <- (OP . STACK)
+// Recursively evaluate left sub-expression
+goto do_eval_operand_left
+
+do_eval_binop1:
+from done_eval_operand_left
+  // Either we have just evaluated EXPR_L, or we have just unevaluated it.
+  // If FLAG_EVAL is true we have just evaluated the left sub-expression,
+  // and we then evaluate the right sub-expression.
+  // If FLAG_EVAL is false we instead go directly to done_eval_binop1.
+if FLAG_EVAL goto do_eval_binop2 else done_eval_binop1
+
+do_eval_binop2:
+from do_eval_binop1
+  // As we have just evaluated the left sub-expression,
+  // FLAG_EVAL will be true, so we toggle it so that evaluating
+  // the right sub-expression will turn it on again.
+  assert(FLAG_EVAL)
+  FLAG_EVAL ^= 'true
+
+  // Pop the left- and right sub-expressions from the stack
+  (OP . STACK) <- STACK
+  (TMP . STACK) <- STACK
+  ((EXPR_L . EXPR_R) . STACK) <- STACK
+
+  // Switch EXPR from the left sub-expression to the right
+  EXPR ^= EXPR_L
+  EXPR ^= EXPR_R
+
+  // Restore the stack
+  STACK <- ((EXPR_L . EXPR_R) . STACK)
+  STACK <- (TMP . STACK)
+  STACK <- (OP . STACK)
+
+  // We have just evaluated the left sub-expression,
+  // so we store the result on the stack and evaluate the right sub-expression
+  EXPR_RES_L <- EXPR_RES
+  STACK <- (EXPR_RES_L . STACK)
+// Recursively evaluate right sub-expression
+goto do_eval_operand_right
+
+do_eval_binop3:
+from done_eval_operand_right
+  // Either we have just evaluated EXPR_R, or we have just unevaluated it.
+  // If FLAG_EVAL is true we have just evaluated the right sub-expression,
+  // and we then evaluate the binop.
+  // If FLAG_EVAL is false we instead go directly to done_eval_binop3
+if FLAG_EVAL goto do_eval_binop4 else done_eval_binop3
+
+// Look at operator and apply it to the left and right sub-expressions,
+// storing the result (temporarily) in TMP
+do_eval_binop4:
+from do_eval_binop3
+  EXPR_RES_R <- EXPR_RES
+  (EXPR_RES_L . STACK) <- STACK
+  (OP . STACK) <- STACK
+
+  // The result will be stored in TMP,
+  // so make sure it is clear
+  assert(TMP = 'nil)
+  (TMP . STACK) <- STACK
+goto do_eval_binop5
+
+do_eval_binop5:
+from do_eval_binop4
+if OP = 'CONS goto eval_cons else do_eval_binop6
+
+do_eval_binop6:
+from do_eval_binop5
+if OP = 'AND goto eval_and else do_eval_binop7
+
+do_eval_binop7:
+from do_eval_binop6
+if OP = 'OR goto eval_or else do_eval_binop8
+
+do_eval_binop8:
+from do_eval_binop7
+if OP = 'LESS goto eval_less else do_eval_binop9
+
+do_eval_binop9:
+from do_eval_binop8
+if OP = 'GREATER goto eval_greater else do_eval_binop10
+
+do_eval_binop10:
+from do_eval_binop9
+if OP = 'EQUAL goto eval_equal else do_eval_binop11
+
+do_eval_binop11:
+from do_eval_binop10
+if OP = 'ADD goto eval_add else do_eval_binop12
+
+do_eval_binop12:
+from do_eval_binop11
+if OP = 'SUB goto eval_sub else do_eval_binop13
+
+do_eval_binop13:
+from do_eval_binop12
+if OP = 'MUL goto eval_mul else do_eval_binop14
+
+do_eval_binop14:
+from do_eval_binop13
+if OP = 'DIV goto eval_div else do_eval_binop15
+
+do_eval_binop15:
+from do_eval_binop14
+  assert(OP = 'XOR)
+goto eval_xor
+
+eval_cons:
+from do_eval_binop5
+  TMP ^= (EXPR_RES_L . EXPR_RES_R)
+goto done_eval_binop5
+
+eval_and:
+from do_eval_binop6
+  TMP ^= EXPR_RES_L && EXPR_RES_R
+goto done_eval_binop6
+
+eval_or:
+from do_eval_binop7
+  TMP ^= EXPR_RES_L || EXPR_RES_R
+goto done_eval_binop7
+
+eval_less:
+from do_eval_binop8
+  TMP ^= EXPR_RES_L < EXPR_RES_R
+goto done_eval_binop8
+
+eval_greater:
+from do_eval_binop9
+  TMP ^= EXPR_RES_L > EXPR_RES_R
+goto done_eval_binop9
+
+eval_equal:
+from do_eval_binop10
+  TMP ^= EXPR_RES_L = EXPR_RES_R
+goto done_eval_binop10
+
+eval_add:
+from do_eval_binop11
+  TMP ^= EXPR_RES_L + EXPR_RES_R
+goto done_eval_binop11
+
+eval_sub:
+from do_eval_binop12
+  TMP ^= EXPR_RES_L - EXPR_RES_R
+goto done_eval_binop12
+
+eval_mul:
+from do_eval_binop13
+  TMP ^= EXPR_RES_L * EXPR_RES_R
+goto done_eval_binop13
+
+eval_div:
+from do_eval_binop14
+  TMP ^= EXPR_RES_L / EXPR_RES_R
+goto done_eval_binop14
+
+eval_xor:
+from do_eval_binop15
+  TMP ^= EXPR_RES_L ^ EXPR_RES_R
+goto done_eval_binop15
+
+done_eval_binop15:
+from eval_xor
+  assert(OP = 'XOR)
+goto done_eval_binop14
+
+done_eval_binop14:
+fi OP = 'DIV from eval_div else done_eval_binop15
+goto done_eval_binop13
+
+done_eval_binop13:
+fi OP = 'MUL from eval_mul else done_eval_binop14
+goto done_eval_binop12
+
+done_eval_binop12:
+fi OP = 'SUB from eval_sub else done_eval_binop13
+goto done_eval_binop11
+
+done_eval_binop11:
+fi OP = 'ADD from eval_add else done_eval_binop12
+goto done_eval_binop10
+
+done_eval_binop10:
+fi OP = 'EQUAL from eval_equal else done_eval_binop11
+goto done_eval_binop9
+
+done_eval_binop9:
+fi OP = 'GREATER from eval_greater else done_eval_binop10
+goto done_eval_binop8
+
+done_eval_binop8:
+fi OP = 'LESS from eval_less else done_eval_binop9
+goto done_eval_binop7
+
+done_eval_binop7:
+fi OP = 'OR from eval_or else done_eval_binop8
+goto done_eval_binop6
+
+done_eval_binop6:
+fi OP = 'AND from eval_and else done_eval_binop7
+goto done_eval_binop5
+
+done_eval_binop5:
+fi OP = 'CONS from eval_cons else done_eval_binop6
+goto done_eval_binop4
+
+done_eval_binop4:
+from done_eval_binop5
+  // put result on the stack
+  STACK <- (TMP . STACK)
+  // put operator back on the stack
+  STACK <- (OP . STACK)
+  // put result of left sub-expression on stack
+  STACK <- (EXPR_RES_L . STACK)
+  // prepare to unevaluate right sub-expression
+  EXPR_RES <- EXPR_RES_R
+goto done_eval_binop3
+
+// Unevaluate right sub-expression
+done_eval_binop3:
+fi FLAG_EVAL from done_eval_binop4 else do_eval_binop3
+  // If FLAG_EVAL is true we unevaluate the right sub-expression.
+  // Otherwise we have already unevaluated it, so we continue.
+if FLAG_EVAL goto do_eval_operand_right else done_eval_binop2
+
+done_eval_binop2:
+from done_eval_binop3
+  // As we have just unevaluated the right sub-expression,
+  // FLAG_EVAL will be false, so we toggle it so that evaluating
+  // the left sub-expression will turn it off.
+  assert(! FLAG_EVAL)
+  FLAG_EVAL ^= 'true
+
+  // pop result of left sub-expression from stack
+  (EXPR_RES_L . STACK) <- STACK
+  // Pop the left- and right sub-expressions from the stack
+  (OP . STACK) <- STACK
+  (TMP . STACK) <- STACK
+  ((EXPR_L . EXPR_R) . STACK) <- STACK
+
+  // Switch EXPR from the right sub-expression to the left
+  EXPR ^= EXPR_R
+  EXPR ^= EXPR_L
+
+  // Restore the stack
+  STACK <- ((EXPR_L . EXPR_R) . STACK)
+  STACK <- (TMP . STACK)
+  STACK <- (OP . STACK)
+
+  // prepare to unevaluate left sub-expression
+  EXPR_RES <- EXPR_RES_L
+goto done_eval_binop1
+
+// Unevaluate left sub-expression
+done_eval_binop1:
+fi FLAG_EVAL from done_eval_binop2 else do_eval_binop1
+  // If FLAG_EVAL is true we unevaluate the left sub-expression.
+  // Otherwise we have already unevaluated it, so we continue.
+if FLAG_EVAL goto do_eval_operand_left else done_eval_binop
+
+done_eval_binop:
+from done_eval_binop1
+  // Save result
+  (OP . STACK) <- STACK
+  (EXPR_RES . STACK) <- STACK
+
+  // Restore original expression
+  EXPR_TYPE ^= 'BINOP
+  ((EXPR_L . EXPR_R) . STACK) <- STACK
+  EXPR ^= EXPR_L
+  EXPR <- (EXPR_TYPE . (OP . (EXPR_L . EXPR_R)))
+
+  // Restore expression type
+  EXPR_TYPE ^= 'BINOP
+
+  // restore old eval flag
+  (FLAG_EVAL . STACK) <- STACK
+goto done_eval3
+
+done_eval3:
+from done_eval_binop
+  assert(EXPR_TYPE = 'BINOP)
+goto done_eval2
+
 done_eval2:
-from done_eval_unop
-  // TODO: implement more expression types
-  assert(EXPR_TYPE = 'UNOP)
+fi EXPR_TYPE = 'UNOP from done_eval_unop else done_eval3
 goto done_eval1
 
 done_eval1:
@@ -348,11 +678,21 @@ goto done_eval
 done_eval:
 fi EXPR_TYPE = 'CONST from eval_const else done_eval1
   EXPR_TYPE ^= hd EXPR
-goto done_eval_junction2
+goto done_eval_junction4
+
+// junction block
+done_eval_junction4:
+from done_eval
+if hd FLAG = 'OPERAND_R goto done_eval_operand_right else done_eval_junction3
+
+// junction block
+done_eval_junction3:
+from done_eval_junction4
+if hd FLAG = 'OPERAND_L goto done_eval_operand_left else done_eval_junction2
 
 // junction block
 done_eval_junction2:
-from done_eval
+from done_eval_junction3
 if hd FLAG = 'OPERAND goto done_eval_operand else done_eval_junction1
 
 // junction block
@@ -364,6 +704,22 @@ if hd FLAG = 'UPDATE goto done_eval_update else done_eval_junction
 done_eval_junction:
 from done_eval_junction1
 if hd FLAG = 'IF goto done_eval_if else done_eval_fi
+
+done_eval_operand_right:
+from done_eval_junction4
+  assert(hd FLAG = 'OPERAND_R)
+  ('OPERAND_R . FLAG) <- FLAG
+  // Toggle eval flag.
+  FLAG_EVAL ^= 'true
+goto do_eval_binop3
+
+done_eval_operand_left:
+from done_eval_junction3
+  assert(hd FLAG = 'OPERAND_L)
+  ('OPERAND_L . FLAG) <- FLAG
+  // Toggle eval flag.
+  FLAG_EVAL ^= 'true
+goto do_eval_binop1
 
 done_eval_operand:
 from done_eval_junction2
