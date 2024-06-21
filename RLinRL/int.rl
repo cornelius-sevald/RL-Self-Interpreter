@@ -5,7 +5,7 @@ with
 (STORE BLOCK LABEL COMES STEPS JUMP BLOCKS STEP STEP_TYPE
  COMES_TYPE JUMP_TYPE UPDATE_TYPE EXPR EXPR_TYPE
  PREV_LABEL UPDATE_VAR LOOKUP VAR VAL OP LABEL_TO_FIND VAR_TO_FIND STACK TMP
- FLAG FLAG_EVAL EXPR_RES EXPR_L EXPR_R EXPR_RES_L EXPR_RES_R
+ FLAG FLAG_EVAL RES EXPR_L EXPR_R RES_L RES_R
  SPETS SKCOLB EROTS)
 
 // NOTE: Many of these variables will often be 'nil, e.g. `BLOCK` is described
@@ -43,11 +43,11 @@ with
 // - LABEL_TO_FIND: Next label to jump to
 // - VAR_TO_FIND: Target of `do_lookup`
 // - OP: Operator to evaluate
-// - EXPR_RES: Where result of `do_eval` is stored
+// - RES: Where result of `do_eval` is stored
 // - EXPR_L: Left sub-expression of binary operator
 // - EXPR_R: Right sub-expression of binary operator
-// - EXPR_RES_L: Result of left sub-expression
-// - EXPR_RES_R: Result of right sub-expression
+// - RES_L: Result of left sub-expression
+// - RES_R: Result of right sub-expression
 // - FLAG: Used to determine from which block we came from and where to go
 // - FLAG_EVAL: Set to true if expression has been evaluated.
 //              Set to false after expression has been unevaluated.
@@ -107,13 +107,13 @@ do_fi1:
 from done_eval_fi
   // Either we have just evaluated EXPR, or we have just unevaluated it.
   // If FLAG_EVAL is true we have just evaluated EXPR,
-  // and we use EXPR_RES to decide the branch.
+  // and we use RES to decide the branch.
   // If FLAG_EVAL is false we instead go directly to do_if4.
 if FLAG_EVAL goto do_fi2 else do_fi4
 
 do_fi2:
 from do_fi1
-if EXPR_RES goto do_fi_true else do_fi_false
+if RES goto do_fi_true else do_fi_false
 
 // True case of fi-come-from
 do_fi_true:
@@ -130,7 +130,7 @@ from do_fi2
 goto do_fi3
 
 do_fi3:
-fi EXPR_RES from do_fi_true else do_fi_false
+fi RES from do_fi_true else do_fi_false
 goto do_fi4
 
 // After unevaluating EXPR, continue to execute the steps of the block
@@ -196,7 +196,7 @@ goto done_step
 do_assert:
 from do_step1
   assert(EXPR = 'nil)
-  EXPR ^= tl (STEP)
+  EXPR ^= tl STEP
 goto do_eval_assert
 
 do_assert1:
@@ -209,7 +209,7 @@ if FLAG_EVAL goto do_assert2 else done_assert1
 
 do_assert2:
 from do_assert1
-  assert(EXPR_RES)
+  assert(RES)
 goto done_assert2
 
 done_assert2:
@@ -272,17 +272,17 @@ goto do_update_xor
 
 do_update_add:
 from do_update3
-  VAL += EXPR_RES
+  VAL += RES
 goto done_update3
 
 do_update_sub:
 from do_update4
-  VAL -= EXPR_RES
+  VAL -= RES
 goto done_update4
 
 do_update_xor:
 from do_update5
-  VAL ^= EXPR_RES
+  VAL ^= RES
 goto done_update5
 
 done_update5:
@@ -386,13 +386,13 @@ goto do_eval_if
 do_if1:
 from done_eval_if
   // Either we have just evaluated EXPR, or we have just unevaluated it.
-  // If FLAG_EVAL is true we have just evaluated EXPR, and we use EXPR_RES to decide the branch.
+  // If FLAG_EVAL is true we have just evaluated EXPR, and we use RES to decide the branch.
   // If FLAG_EVAL is false we instead go directly to do_if4.
 if FLAG_EVAL goto do_if2 else do_if4
 
 do_if2:
 from do_if1
-if EXPR_RES goto do_if_true else do_if_false
+if RES goto do_if_true else do_if_false
 
 // True case of if-jump
 do_if_true:
@@ -409,7 +409,7 @@ from do_if2
 goto do_if3
 
 do_if3:
-fi EXPR_RES from do_if_true else do_if_false
+fi RES from do_if_true else do_if_false
 goto do_if4
 
 do_if4:
@@ -693,7 +693,7 @@ fi hd FLAG = 'ASSERT from do_eval_assert else do_eval_junction4
 goto do_eval
 
 // Evaluate the expression in EXPR,
-// and store the result in EXPR_RES.
+// and store the result in RES.
 do_eval:
 from do_eval_junction5
   assert(EXPR_TYPE = 'nil)
@@ -717,7 +717,7 @@ goto do_eval_binop
 eval_const:
 from do_eval
   assert(EXPR_TYPE = 'CONST)
-  EXPR_RES ^= tl EXPR
+  RES ^= tl EXPR
 goto done_eval
 
 // Evaluate a variable
@@ -728,7 +728,7 @@ goto do_lookup_eval
 
 eval_var1:
 from done_lookup_eval
-  EXPR_RES ^= tl LOOKUP
+  RES ^= tl LOOKUP
 goto undo_lookup_eval
 
 eval_var2:
@@ -752,7 +752,7 @@ from do_eval2
 
   // also save the current expression result on the stack,
   // so that in case we are unevaluating it we can still evaluate the sub-expression
-  STACK <- (EXPR_RES . STACK)
+  STACK <- (RES . STACK)
 
   // finally, save the operator on the stack in case it is used by sub-expressions
   STACK <- (OP . STACK)
@@ -766,7 +766,7 @@ from done_eval_operand
   // If FLAG_EVAL is false we instead go directly to done_eval_unop1.
 if FLAG_EVAL goto do_eval_unop2 else done_eval_unop1
 
-// Look at operator and apply it to EXPR_RES,
+// Look at operator and apply it to RES,
 // storing the result (temporarily) in TMP
 do_eval_unop2:
 from do_eval_unop1
@@ -790,19 +790,19 @@ goto eval_tl
 // Evaluate NOT expression, storing the result in TMP
 eval_not:
 from do_eval_unop2
-  TMP ^= ! EXPR_RES
+  TMP ^= ! RES
 goto done_eval_unop2
 
 // Evaluate HD (head) expression, storing the result in TMP
 eval_hd:
 from do_eval_unop3
-  TMP ^= hd EXPR_RES
+  TMP ^= hd RES
 goto done_eval_unop3
 
 // Evaluate TL (tail) expression, storing the result in TMP
 eval_tl:
 from do_eval_unop4
-  TMP ^= tl EXPR_RES
+  TMP ^= tl RES
 goto done_eval_unop4
 
 done_eval_unop4:
@@ -840,7 +840,7 @@ from done_eval_unop1
   EXPR_TYPE ^= 'UNOP
 
   // Save result
-  (EXPR_RES . STACK) <- STACK
+  (RES . STACK) <- STACK
 
   // restore old eval flag
   (FLAG_EVAL . STACK) <- STACK
@@ -869,7 +869,7 @@ from do_eval3
   // also save the current expression result on the stack,
   // so that in case we are unevaluating it we can
   // still evaluate the sub-expression
-  STACK <- (EXPR_RES . STACK)
+  STACK <- (RES . STACK)
 
   // finally, save the operator on the stack in case it
   // is used by sub-expressions
@@ -909,8 +909,8 @@ from do_eval_binop1
 
   // We have just evaluated the left sub-expression,
   // so we store the result on the stack and evaluate the right sub-expression
-  EXPR_RES_L <- EXPR_RES
-  STACK <- (EXPR_RES_L . STACK)
+  RES_L <- RES
+  STACK <- (RES_L . STACK)
 // Recursively evaluate right sub-expression
 goto do_eval_operand_right
 
@@ -926,8 +926,8 @@ if FLAG_EVAL goto do_eval_binop4 else done_eval_binop3
 // storing the result (temporarily) in TMP
 do_eval_binop4:
 from do_eval_binop3
-  EXPR_RES_R <- EXPR_RES
-  (EXPR_RES_L . STACK) <- STACK
+  RES_R <- RES
+  (RES_L . STACK) <- STACK
   (OP . STACK) <- STACK
 
   // The result will be stored in TMP,
@@ -983,57 +983,57 @@ goto eval_xor
 
 eval_cons:
 from do_eval_binop5
-  TMP ^= (EXPR_RES_L . EXPR_RES_R)
+  TMP ^= (RES_L . RES_R)
 goto done_eval_binop5
 
 eval_and:
 from do_eval_binop6
-  TMP ^= EXPR_RES_L && EXPR_RES_R
+  TMP ^= RES_L && RES_R
 goto done_eval_binop6
 
 eval_or:
 from do_eval_binop7
-  TMP ^= EXPR_RES_L || EXPR_RES_R
+  TMP ^= RES_L || RES_R
 goto done_eval_binop7
 
 eval_less:
 from do_eval_binop8
-  TMP ^= EXPR_RES_L < EXPR_RES_R
+  TMP ^= RES_L < RES_R
 goto done_eval_binop8
 
 eval_greater:
 from do_eval_binop9
-  TMP ^= EXPR_RES_L > EXPR_RES_R
+  TMP ^= RES_L > RES_R
 goto done_eval_binop9
 
 eval_equal:
 from do_eval_binop10
-  TMP ^= EXPR_RES_L = EXPR_RES_R
+  TMP ^= RES_L = RES_R
 goto done_eval_binop10
 
 eval_add:
 from do_eval_binop11
-  TMP ^= EXPR_RES_L + EXPR_RES_R
+  TMP ^= RES_L + RES_R
 goto done_eval_binop11
 
 eval_sub:
 from do_eval_binop12
-  TMP ^= EXPR_RES_L - EXPR_RES_R
+  TMP ^= RES_L - RES_R
 goto done_eval_binop12
 
 eval_mul:
 from do_eval_binop13
-  TMP ^= EXPR_RES_L * EXPR_RES_R
+  TMP ^= RES_L * RES_R
 goto done_eval_binop13
 
 eval_div:
 from do_eval_binop14
-  TMP ^= EXPR_RES_L / EXPR_RES_R
+  TMP ^= RES_L / RES_R
 goto done_eval_binop14
 
 eval_xor:
 from do_eval_binop15
-  TMP ^= EXPR_RES_L ^ EXPR_RES_R
+  TMP ^= RES_L ^ RES_R
 goto done_eval_binop15
 
 done_eval_binop15:
@@ -1088,9 +1088,9 @@ from done_eval_binop5
   // put operator back on the stack
   STACK <- (OP . STACK)
   // put result of left sub-expression on stack
-  STACK <- (EXPR_RES_L . STACK)
+  STACK <- (RES_L . STACK)
   // prepare to unevaluate right sub-expression
-  EXPR_RES <- EXPR_RES_R
+  RES <- RES_R
 goto done_eval_binop3
 
 // Unevaluate right sub-expression
@@ -1109,7 +1109,7 @@ from done_eval_binop3
   FLAG_EVAL ^= 'true
 
   // pop result of left sub-expression from stack
-  (EXPR_RES_L . STACK) <- STACK
+  (RES_L . STACK) <- STACK
   // Pop the left- and right sub-expressions from the stack
   (OP . STACK) <- STACK
   (TMP . STACK) <- STACK
@@ -1125,7 +1125,7 @@ from done_eval_binop3
   STACK <- (OP . STACK)
 
   // prepare to unevaluate left sub-expression
-  EXPR_RES <- EXPR_RES_L
+  RES <- RES_L
 goto done_eval_binop1
 
 // Unevaluate left sub-expression
@@ -1139,7 +1139,7 @@ done_eval_binop:
 from done_eval_binop1
   // Save result
   (OP . STACK) <- STACK
-  (EXPR_RES . STACK) <- STACK
+  (RES . STACK) <- STACK
 
   // Restore original expression
   EXPR_TYPE ^= 'BINOP
