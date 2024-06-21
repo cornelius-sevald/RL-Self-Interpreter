@@ -195,8 +195,37 @@ goto done_step
 
 do_assert:
 from do_step1
-  // TODO: implement assert
-  //assert(!'assert_not_implemented)
+  assert(EXPR = 'nil)
+  EXPR ^= tl (STEP)
+goto do_eval_assert
+
+do_assert1:
+from done_eval_assert
+  // Either we have just evaluated EXPR, or we have just unevaluated it.
+  // If FLAG_EVAL is true we have just evaluated EXPR,
+  //   so we assert the result.
+  // If FLAG_EVAL is false we instead go directly to done_assert1.
+if FLAG_EVAL goto do_assert2 else done_assert1
+
+do_assert2:
+from do_assert1
+  assert(EXPR_RES)
+goto done_assert2
+
+done_assert2:
+from do_assert2
+goto done_assert1
+
+done_assert1:
+fi FLAG_EVAL from done_assert2 else do_assert1
+  // If FLAG_EVAL is true we unevaluate EXPR.
+  // Otherwise we are done with the assert step.
+if FLAG_EVAL goto do_eval_assert else done_assert
+
+done_assert:
+from done_assert1
+  EXPR ^= tl (STEP)
+  assert(EXPR = 'nil)
 goto done_step1
 
 do_replace:
@@ -220,7 +249,7 @@ from done_eval_update
   // Either we have just evaluated EXPR, or we have just unevaluated it.
   // If FLAG_EVAL is true we have just evaluated EXPR,
   //   so we lookup the variable and update it.
-  // If FLAG_EVAL is false we instead go directly to do_update?.
+  // If FLAG_EVAL is false we instead go directly to done_update1.
 if FLAG_EVAL goto do_update2 else done_update1
 
 do_update2:
@@ -299,7 +328,7 @@ fi STEP_TYPE = 'REPLACE from do_replace else done_step3
 goto done_step1
 
 done_step1:
-fi STEP_TYPE = 'ASSERT from do_assert else done_step2
+fi STEP_TYPE = 'ASSERT from done_assert else done_step2
   STEP_TYPE ^= hd STEP
 goto done_step
 
@@ -633,6 +662,12 @@ fi FLAG_EVAL from done_eval_binop3 else do_eval_binop2
   FLAG <- ('OPERAND_R . FLAG)
 goto do_eval_junction4
 
+// evaluate expression of assertion
+do_eval_assert:
+fi FLAG_EVAL from done_assert1 else do_assert
+  FLAG <- ('ASSERT . FLAG)
+goto do_eval_junction5
+
 do_eval_junction:
 fi hd FLAG = 'IF from do_eval_if else do_eval_fi
 goto do_eval_junction1
@@ -651,12 +686,16 @@ goto do_eval_junction4
 
 do_eval_junction4:
 fi hd FLAG = 'OPERAND_R from do_eval_operand_right else do_eval_junction3
+goto do_eval_junction5
+
+do_eval_junction5:
+fi hd FLAG = 'ASSERT from do_eval_assert else do_eval_junction4
 goto do_eval
 
 // Evaluate the expression in EXPR,
 // and store the result in EXPR_RES.
 do_eval:
-from do_eval_junction4
+from do_eval_junction5
   assert(EXPR_TYPE = 'nil)
   EXPR_TYPE ^= hd EXPR
 if EXPR_TYPE = 'CONST goto eval_const else do_eval1
@@ -1132,11 +1171,16 @@ goto done_eval
 done_eval:
 fi EXPR_TYPE = 'CONST from eval_const else done_eval1
   EXPR_TYPE ^= hd EXPR
-goto done_eval_junction4
+goto done_eval_junction5
+
+// junction block
+done_eval_junction5:
+from done_eval
+if hd FLAG = 'ASSERT goto done_eval_assert else done_eval_junction4
 
 // junction block
 done_eval_junction4:
-from done_eval
+from done_eval_junction5
 if hd FLAG = 'OPERAND_R goto done_eval_operand_right else done_eval_junction3
 
 // junction block
@@ -1158,6 +1202,14 @@ if hd FLAG = 'UPDATE goto done_eval_update else done_eval_junction
 done_eval_junction:
 from done_eval_junction1
 if hd FLAG = 'IF goto done_eval_if else done_eval_fi
+
+done_eval_assert:
+from done_eval_junction5
+  assert(hd FLAG = 'ASSERT)
+  ('ASSERT . FLAG) <- FLAG
+  // Toggle eval flag.
+  FLAG_EVAL ^= 'true
+goto do_assert1
 
 done_eval_operand_right:
 from done_eval_junction4
