@@ -88,8 +88,8 @@ goto done_come_from
 
 do_from:
 from do_come_from1
-  assert(COMES_TYPE = 'FROM)
-  assert(PREV_LABEL = tl COMES)
+  // DEBUG: assert(COMES_TYPE = 'FROM)
+  // DEBUG: assert(PREV_LABEL = tl COMES)
 
   // Clear label of previous block.
   PREV_LABEL ^= tl COMES
@@ -98,8 +98,8 @@ goto done_come_from1
 // Evaluate conditional expression of fi
 do_fi:
 from do_come_from1
-  assert(COMES_TYPE = 'FI)
-  assert(EXPR = 'nil) 
+  // DEBUG: assert(COMES_TYPE = 'FI)
+  // DEBUG: assert(EXPR = 'nil) 
   EXPR ^= hd (tl COMES)
 goto do_eval_fi
 
@@ -144,7 +144,7 @@ if FLAG_EVAL goto do_eval_fi else done_fi
 done_fi:
 from do_fi4
   EXPR ^= hd (tl COMES)
-  assert(EXPR = 'nil)
+  // DEBUG: assert(EXPR = 'nil)
 goto done_come_from1
 
 // Junction of `do_from` and `done_fi`
@@ -185,7 +185,7 @@ if STEP_TYPE = 'REPLACE goto do_replace else do_step3
 
 do_step3:
 from do_step2
-  assert(STEP_TYPE = 'UPDATE)
+  // DEBUG: assert(STEP_TYPE = 'UPDATE)
 goto do_update
 
 // nothing to do
@@ -195,7 +195,7 @@ goto done_step
 
 do_assert:
 from do_step1
-  assert(EXPR = 'nil)
+  // DEBUG: assert(EXPR = 'nil)
   EXPR ^= tl STEP
 goto do_eval_assert
 
@@ -225,7 +225,7 @@ if FLAG_EVAL goto do_eval_assert else done_assert
 done_assert:
 from done_assert1
   EXPR ^= tl (STEP)
-  assert(EXPR = 'nil)
+  // DEBUG: assert(EXPR = 'nil)
 goto done_step1
 
 do_replace:
@@ -236,9 +236,9 @@ goto done_step2
 
 do_update:
 from do_step3
-  assert(EXPR        = 'nil)
-  assert(UPDATE_VAR  = 'nil)
-  assert(UPDATE_TYPE = 'nil)
+  // DEBUG: assert(EXPR        = 'nil)
+  // DEBUG: assert(UPDATE_VAR  = 'nil)
+  // DEBUG: assert(UPDATE_TYPE = 'nil)
   UPDATE_TYPE ^= hd (tl STEP)
   UPDATE_VAR ^= hd (tl (tl STEP))
   EXPR ^= tl (tl (tl STEP))
@@ -267,7 +267,7 @@ if UPDATE_TYPE = 'SUB goto do_update_sub else do_update5
 
 do_update5:
 from do_update4
-  assert(UPDATE_TYPE = 'XOR)
+  // DEBUG: assert(UPDATE_TYPE = 'XOR)
 goto do_update_xor
 
 do_update_add:
@@ -313,14 +313,14 @@ from done_update1
   UPDATE_TYPE ^= hd (tl STEP)
   UPDATE_VAR ^= hd (tl (tl STEP))
   EXPR ^= tl (tl (tl STEP))
-  assert(EXPR        = 'nil)
-  assert(UPDATE_VAR  = 'nil)
-  assert(UPDATE_TYPE = 'nil)
+  // DEBUG: assert(EXPR        = 'nil)
+  // DEBUG: assert(UPDATE_VAR  = 'nil)
+  // DEBUG: assert(UPDATE_TYPE = 'nil)
 goto done_step3
 
 done_step3:
 from done_update
-  assert(STEP_TYPE = 'UPDATE)
+  // DEBUG: assert(STEP_TYPE = 'UPDATE)
 goto done_step2
 
 done_step2:
@@ -368,8 +368,8 @@ goto stop
 
 do_goto:
 from do_jump1
-  assert(JUMP_TYPE = 'GOTO)
-  assert(LABEL_TO_FIND = 'nil)
+  // DEBUG: assert(JUMP_TYPE = 'GOTO)
+  // DEBUG: assert(LABEL_TO_FIND = 'nil)
 
   // save label of new block to find
   LABEL_TO_FIND ^= tl JUMP
@@ -378,8 +378,8 @@ goto done_jump
 // Evaluate condition expression of if
 do_if:
 from do_jump1
-  assert(JUMP_TYPE = 'IF)
-  assert(EXPR = 'nil)
+  // DEBUG: assert(JUMP_TYPE = 'IF)
+  // DEBUG: assert(EXPR = 'nil)
   EXPR ^= hd (tl JUMP)
 goto do_eval_if
 
@@ -422,7 +422,7 @@ if FLAG_EVAL goto do_eval_if else done_if
 done_if:
 from do_if4
   EXPR ^= hd (tl JUMP)
-  assert(EXPR = 'nil)
+  // DEBUG: assert(EXPR = 'nil)
 goto done_jump
 
 // Junction of `do_goto` and `done_if`
@@ -489,8 +489,8 @@ from do_exit
   // we know that the current block is the exit block,
   // and so it belongs at the end of BLOCKS.
   // we also know that all other blocks must be in SKCOLB.
-  assert(JUMP = 'EXIT)
-  assert(BLOCKS = 'nil)
+  // DEBUG: assert(JUMP = 'EXIT)
+  // DEBUG: assert(BLOCKS = 'nil)
   // put exit block at from of SKCOLB before moving
   // all blocks from SKCOLB to BLOCKS.
   BLOCK <- (LABEL . (COMES . (STEPS . JUMP)))
@@ -519,7 +519,7 @@ exit
 // lookup variable of expression
 do_lookup_eval:
 from eval_var
-  assert(VAR_TO_FIND = 'nil)
+  // DEBUG: assert(VAR_TO_FIND = 'nil)
   VAR_TO_FIND ^= tl EXPR
   FLAG <- ('EVAL . FLAG)
 goto do_lookup
@@ -527,7 +527,7 @@ goto do_lookup
 // lookup variable of update step
 do_lookup_update:
 from do_update2
-  assert(VAR_TO_FIND = 'nil)
+  // DEBUG: assert(VAR_TO_FIND = 'nil)
   VAR_TO_FIND ^= hd (tl (tl STEP))
   FLAG <- ('UPDATE . FLAG)
 goto do_lookup
@@ -557,7 +557,7 @@ done_lookup_update:
 from done_lookup
   ('UPDATE . FLAG) <- FLAG
   VAR_TO_FIND ^= hd (tl (tl STEP))
-  assert(VAR_TO_FIND = 'nil)
+  // DEBUG: assert(VAR_TO_FIND = 'nil)
 goto do_update3
 
 // return to evaluating variable expression after lookup
@@ -565,7 +565,7 @@ done_lookup_eval:
 from done_lookup
   ('EVAL . FLAG) <- FLAG
   VAR_TO_FIND ^= tl EXPR
-  assert(VAR_TO_FIND = 'nil)
+  // DEBUG: assert(VAR_TO_FIND = 'nil)
 goto eval_var1
 
 // UNDO VARIABLE LOOKUP
@@ -574,7 +574,7 @@ goto eval_var1
 // undo lookup variable of expression
 undo_lookup_eval:
 from eval_var1
-  assert(VAR_TO_FIND = 'nil)
+  // DEBUG: assert(VAR_TO_FIND = 'nil)
   VAR_TO_FIND ^= tl EXPR
   FLAG <- ('EVAL . FLAG)
 goto undo_lookup
@@ -582,7 +582,7 @@ goto undo_lookup
 // undo lookup variable of update step
 undo_lookup_update:
 from done_update3
-  assert(VAR_TO_FIND = 'nil)
+  // DEBUG: assert(VAR_TO_FIND = 'nil)
   VAR_TO_FIND ^= UPDATE_VAR
   FLAG <- ('UPDATE . FLAG)
 goto undo_lookup
@@ -599,7 +599,7 @@ if EROTS goto undo_lookup2 else undone_lookup
 
 undo_lookup2:
 from undo_lookup1
-  assert(EROTS)
+  // DEBUG: assert(EROTS)
   (LOOKUP . EROTS) <- EROTS
 goto undo_lookup1
 
@@ -612,7 +612,7 @@ undone_lookup_update:
 from undone_lookup
   ('UPDATE . FLAG) <- FLAG
   VAR_TO_FIND ^= UPDATE_VAR
-  assert(VAR_TO_FIND = 'nil)
+  // DEBUG: assert(VAR_TO_FIND = 'nil)
 goto done_update2
 
 // return to evaluating variable expression after undoing lookup
@@ -620,7 +620,7 @@ undone_lookup_eval:
 from undone_lookup
   ('EVAL . FLAG) <- FLAG
   VAR_TO_FIND ^= tl EXPR
-  assert(VAR_TO_FIND = 'nil)
+  // DEBUG: assert(VAR_TO_FIND = 'nil)
 goto eval_var2
 
 // EVALUATE EXPRESSION
@@ -696,7 +696,7 @@ goto do_eval
 // and store the result in RES.
 do_eval:
 from do_eval_junction5
-  assert(EXPR_TYPE = 'nil)
+  // DEBUG: assert(EXPR_TYPE = 'nil)
   EXPR_TYPE ^= hd EXPR
 if EXPR_TYPE = 'CONST goto eval_const else do_eval1
 
@@ -710,20 +710,20 @@ if EXPR_TYPE = 'UNOP goto do_eval_unop else do_eval3
 
 do_eval3:
 from do_eval2
-  assert(EXPR_TYPE = 'BINOP)
+  // DEBUG: assert(EXPR_TYPE = 'BINOP)
 goto do_eval_binop
 
 // Evaluate a constant
 eval_const:
 from do_eval
-  assert(EXPR_TYPE = 'CONST)
+  // DEBUG: assert(EXPR_TYPE = 'CONST)
   RES ^= tl EXPR
 goto done_eval
 
 // Evaluate a variable
 eval_var:
 from do_eval1
-  assert(EXPR_TYPE = 'VAR)
+  // DEBUG: assert(EXPR_TYPE = 'VAR)
 goto do_lookup_eval
 
 eval_var1:
@@ -774,7 +774,7 @@ from do_eval_unop1
 
   // The result will be stored in TMP,
   // so make sure it is clear
-  assert(TMP = 'nil)
+  // DEBUG: assert(TMP = 'nil)
   (TMP . STACK) <- STACK
 if OP = 'NOT goto eval_not else do_eval_unop3
 
@@ -784,7 +784,7 @@ if OP = 'HD goto eval_hd else do_eval_unop4
 
 do_eval_unop4:
 from do_eval_unop3
-  assert(OP = 'TL)
+  // DEBUG: assert(OP = 'TL)
 goto eval_tl
 
 // Evaluate NOT expression, storing the result in TMP
@@ -807,7 +807,7 @@ goto done_eval_unop4
 
 done_eval_unop4:
 from eval_tl
-  assert(OP = 'TL)
+  // DEBUG: assert(OP = 'TL)
 goto done_eval_unop3
 
 done_eval_unop3:
@@ -890,7 +890,7 @@ from do_eval_binop1
   // As we have just evaluated the left sub-expression,
   // FLAG_EVAL will be true, so we toggle it so that evaluating
   // the right sub-expression will turn it on again.
-  assert(FLAG_EVAL)
+  // DEBUG: assert(FLAG_EVAL)
   FLAG_EVAL ^= 'true
 
   // Pop the left- and right sub-expressions from the stack
@@ -932,7 +932,7 @@ from do_eval_binop3
 
   // The result will be stored in TMP,
   // so make sure it is clear
-  assert(TMP = 'nil)
+  // DEBUG: assert(TMP = 'nil)
   (TMP . STACK) <- STACK
 goto do_eval_binop5
 
@@ -978,7 +978,7 @@ if OP = 'DIV goto eval_div else do_eval_binop15
 
 do_eval_binop15:
 from do_eval_binop14
-  assert(OP = 'XOR)
+  // DEBUG: assert(OP = 'XOR)
 goto eval_xor
 
 eval_cons:
@@ -1038,7 +1038,7 @@ goto done_eval_binop15
 
 done_eval_binop15:
 from eval_xor
-  assert(OP = 'XOR)
+  // DEBUG: assert(OP = 'XOR)
 goto done_eval_binop14
 
 done_eval_binop14:
@@ -1105,7 +1105,7 @@ from done_eval_binop3
   // As we have just unevaluated the right sub-expression,
   // FLAG_EVAL will be false, so we toggle it so that evaluating
   // the left sub-expression will turn it off.
-  assert(! FLAG_EVAL)
+  // DEBUG: assert(! FLAG_EVAL)
   FLAG_EVAL ^= 'true
 
   // pop result of left sub-expression from stack
@@ -1156,7 +1156,7 @@ goto done_eval3
 
 done_eval3:
 from done_eval_binop
-  assert(EXPR_TYPE = 'BINOP)
+  // DEBUG: assert(EXPR_TYPE = 'BINOP)
 goto done_eval2
 
 done_eval2:
@@ -1205,7 +1205,7 @@ if hd FLAG = 'IF goto done_eval_if else done_eval_fi
 
 done_eval_assert:
 from done_eval_junction5
-  assert(hd FLAG = 'ASSERT)
+  // DEBUG: assert(hd FLAG = 'ASSERT)
   ('ASSERT . FLAG) <- FLAG
   // Toggle eval flag.
   FLAG_EVAL ^= 'true
@@ -1213,7 +1213,7 @@ goto do_assert1
 
 done_eval_operand_right:
 from done_eval_junction4
-  assert(hd FLAG = 'OPERAND_R)
+  // DEBUG: assert(hd FLAG = 'OPERAND_R)
   ('OPERAND_R . FLAG) <- FLAG
   // Toggle eval flag.
   FLAG_EVAL ^= 'true
@@ -1221,7 +1221,7 @@ goto do_eval_binop3
 
 done_eval_operand_left:
 from done_eval_junction3
-  assert(hd FLAG = 'OPERAND_L)
+  // DEBUG: assert(hd FLAG = 'OPERAND_L)
   ('OPERAND_L . FLAG) <- FLAG
   // Toggle eval flag.
   FLAG_EVAL ^= 'true
@@ -1229,7 +1229,7 @@ goto do_eval_binop1
 
 done_eval_operand:
 from done_eval_junction2
-  assert(hd FLAG = 'OPERAND)
+  // DEBUG: assert(hd FLAG = 'OPERAND)
   ('OPERAND . FLAG) <- FLAG
   // Toggle eval flag.
   FLAG_EVAL ^= 'true
@@ -1237,7 +1237,7 @@ goto do_eval_unop1
 
 done_eval_update:
 from done_eval_junction1
-  assert(hd FLAG = 'UPDATE)
+  // DEBUG: assert(hd FLAG = 'UPDATE)
   ('UPDATE . FLAG) <- FLAG
   // Toggle eval flag.
   FLAG_EVAL ^= 'true
@@ -1245,7 +1245,7 @@ goto do_update1
 
 done_eval_if:
 from done_eval_junction
-  assert(hd FLAG = 'IF)
+  // DEBUG: assert(hd FLAG = 'IF)
   ('IF . FLAG) <- FLAG
   // Toggle eval flag.
   FLAG_EVAL ^= 'true
@@ -1253,7 +1253,7 @@ goto do_if1
 
 done_eval_fi:
 from done_eval_junction
-  assert(hd FLAG = 'FI)
+  // DEBUG: assert(hd FLAG = 'FI)
   ('FI . FLAG) <- FLAG
   // Toggle eval flag.
   FLAG_EVAL ^= 'true

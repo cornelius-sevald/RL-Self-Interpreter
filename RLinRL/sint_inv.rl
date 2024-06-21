@@ -20,7 +20,6 @@ do_exit:
 	from stop1
 	(BLOCK . SKCOLB) <- SKCOLB
 	(LABEL . (COMES . (STEPS . JUMP))) <- BLOCK
-	assert((JUMP = 'EXIT))
 	goto do_jump
 
 do_jump:
@@ -74,7 +73,6 @@ done_step1:
 
 done_assert:
 	from done_step1
-	assert((EXPR = 'nil))
 	EXPR ^= tl(STEP)
 	goto done_assert1
 
@@ -97,7 +95,6 @@ done_eval_assert:
 		else done_assert1
 	FLAG_EVAL ^= 'true
 	FLAG <- ('ASSERT . FLAG)
-	assert((hd(FLAG) = 'ASSERT))
 	goto done_eval
 
 done_eval:
@@ -112,7 +109,6 @@ done_eval:
 eval_const:
 	from done_eval
 	RES ^= tl(EXPR)
-	assert((EXPR_TYPE = 'CONST))
 	goto do_eval_junction5
 
 do_eval_junction5:
@@ -120,7 +116,6 @@ do_eval_junction5:
 		from eval_const
 		else do_eval1
 	EXPR_TYPE ^= hd(EXPR)
-	assert((EXPR_TYPE = 'nil))
 	if (hd(FLAG) = 'ASSERT)
 		goto do_eval_assert
 		else do_eval_junction4
@@ -135,7 +130,6 @@ do_eval_assert:
 do_assert:
 	from do_eval_assert
 	EXPR ^= tl(STEP)
-	assert((EXPR = 'nil))
 	goto do_step1
 
 do_step1:
@@ -197,7 +191,6 @@ done_eval_operand_right:
 		else done_eval_binop3
 	FLAG_EVAL ^= 'true
 	FLAG <- ('OPERAND_R . FLAG)
-	assert((hd(FLAG) = 'OPERAND_R))
 	goto done_eval_junction4
 
 done_eval_junction4:
@@ -361,9 +354,7 @@ do_eval_binop14:
 
 do_eval_binop15:
 	from done_eval_binop14
-	assert((OP = 'XOR))
 	TMP ^= (RES_L ^ RES_R)
-	assert((OP = 'XOR))
 	goto do_eval_binop14
 
 do_eval_binop2:
@@ -387,7 +378,6 @@ done_eval_operand_left:
 		else done_eval_binop1
 	FLAG_EVAL ^= 'true
 	FLAG <- ('OPERAND_L . FLAG)
-	assert((hd(FLAG) = 'OPERAND_L))
 	goto done_eval_junction3
 
 done_eval_junction3:
@@ -442,7 +432,6 @@ do_eval3:
 	EXPR_TYPE ^= 'BINOP
 	EXPR <- (EXPR_TYPE . (OP . (EXPR_L . EXPR_R)))
 	EXPR_TYPE ^= 'BINOP
-	assert((EXPR_TYPE = 'BINOP))
 	goto do_eval2
 
 do_eval2:
@@ -505,7 +494,6 @@ done_eval_operand:
 		else done_eval_unop1
 	FLAG_EVAL ^= 'true
 	FLAG <- ('OPERAND . FLAG)
-	assert((hd(FLAG) = 'OPERAND))
 	goto done_eval_junction2
 
 done_eval_junction2:
@@ -533,9 +521,7 @@ do_eval_unop3:
 
 do_eval_unop4:
 	from done_eval_unop3
-	assert((OP = 'TL))
 	TMP ^= tl(RES)
-	assert((OP = 'TL))
 	goto do_eval_unop3
 
 do_eval_unop:
@@ -571,7 +557,6 @@ done_update1:
 
 undone_lookup_update:
 	from done_update1
-	assert((VAR_TO_FIND = 'nil))
 	VAR_TO_FIND ^= UPDATE_VAR
 	FLAG <- ('UPDATE . FLAG)
 	goto undone_lookup
@@ -601,9 +586,7 @@ done_lookup_eval:
 	from undo_lookup
 	('EVAL . FLAG) <- FLAG
 	VAR_TO_FIND ^= tl(EXPR)
-	assert((VAR_TO_FIND = 'nil))
 	RES ^= tl(LOOKUP)
-	assert((VAR_TO_FIND = 'nil))
 	VAR_TO_FIND ^= tl(EXPR)
 	FLAG <- ('EVAL . FLAG)
 	goto done_lookup
@@ -638,15 +621,12 @@ eval_var:
 	from do_lookup
 	('EVAL . FLAG) <- FLAG
 	VAR_TO_FIND ^= tl(EXPR)
-	assert((VAR_TO_FIND = 'nil))
-	assert((EXPR_TYPE = 'VAR))
 	goto do_eval1
 
 do_update2:
 	from do_lookup
 	('UPDATE . FLAG) <- FLAG
 	VAR_TO_FIND ^= hd(tl(tl(STEP)))
-	assert((VAR_TO_FIND = 'nil))
 	goto done_eval_update
 
 done_eval_update:
@@ -655,7 +635,6 @@ done_eval_update:
 		else done_update1
 	FLAG_EVAL ^= 'true
 	FLAG <- ('UPDATE . FLAG)
-	assert((hd(FLAG) = 'UPDATE))
 	goto done_eval_junction1
 
 done_eval_junction1:
@@ -668,7 +647,6 @@ done_update3:
 	from undo_lookup
 	('UPDATE . FLAG) <- FLAG
 	VAR_TO_FIND ^= UPDATE_VAR
-	assert((VAR_TO_FIND = 'nil))
 	(VAR . VAL) <- LOOKUP
 	if (UPDATE_TYPE = 'ADD)
 		goto do_update_add
@@ -684,7 +662,6 @@ done_lookup_update:
 		from do_update_add
 		else do_update4
 	LOOKUP <- (VAR . VAL)
-	assert((VAR_TO_FIND = 'nil))
 	VAR_TO_FIND ^= hd(tl(tl(STEP)))
 	FLAG <- ('UPDATE . FLAG)
 	goto done_lookup
@@ -709,7 +686,6 @@ do_update4:
 do_update5:
 	from done_update4
 	VAL ^= RES
-	assert((UPDATE_TYPE = 'XOR))
 	goto do_update4
 
 undo_lookup2:
@@ -722,10 +698,6 @@ do_step2:
 	EXPR ^= tl(tl(tl(STEP)))
 	UPDATE_VAR ^= hd(tl(tl(STEP)))
 	UPDATE_TYPE ^= hd(tl(STEP))
-	assert((UPDATE_TYPE = 'nil))
-	assert((UPDATE_VAR = 'nil))
-	assert((EXPR = 'nil))
-	assert((STEP_TYPE = 'UPDATE))
 	assert(!((STEP_TYPE = 'REPLACE)))
 	goto do_step1
 
@@ -773,7 +745,6 @@ done_eval_if:
 		else do_if4
 	FLAG_EVAL ^= 'true
 	FLAG <- ('IF . FLAG)
-	assert((hd(FLAG) = 'IF))
 	goto done_eval_junction
 
 done_eval_junction:
@@ -790,8 +761,6 @@ do_if_false:
 do_if:
 	from do_eval_if
 	EXPR ^= hd(tl(JUMP))
-	assert((EXPR = 'nil))
-	assert((JUMP_TYPE = 'IF))
 	goto do_jump1
 
 do_jump1:
@@ -839,7 +808,6 @@ done_eval_fi:
 		else do_fi4
 	FLAG_EVAL ^= 'true
 	FLAG <- ('FI . FLAG)
-	assert((hd(FLAG) = 'FI))
 	goto done_eval_junction
 
 do_fi_false:
@@ -850,8 +818,6 @@ do_fi_false:
 do_fi:
 	from do_eval_fi
 	EXPR ^= hd(tl(COMES))
-	assert((EXPR = 'nil))
-	assert((COMES_TYPE = 'FI))
 	goto do_come_from1
 
 do_come_from1:
@@ -917,13 +883,10 @@ done_jump:
 do_goto:
 	from done_jump
 	LABEL_TO_FIND ^= tl(JUMP)
-	assert((LABEL_TO_FIND = 'nil))
-	assert((JUMP_TYPE = 'GOTO))
 	goto do_jump1
 
 done_if:
 	from done_jump
-	assert((EXPR = 'nil))
 	EXPR ^= hd(tl(JUMP))
 	goto do_if4
 
@@ -940,7 +903,6 @@ done_eval1:
 
 undone_lookup_eval:
 	from done_eval1
-	assert((VAR_TO_FIND = 'nil))
 	VAR_TO_FIND ^= tl(EXPR)
 	FLAG <- ('EVAL . FLAG)
 	goto undone_lookup
@@ -963,7 +925,6 @@ done_eval_unop:
 
 done_eval_binop:
 	from done_eval2
-	assert((EXPR_TYPE = 'BINOP))
 	STACK <- (FLAG_EVAL . STACK)
 	EXPR_TYPE ^= 'BINOP
 	(EXPR_TYPE . (OP . (EXPR_L . EXPR_R))) <- EXPR
@@ -977,10 +938,6 @@ done_eval_binop:
 done_update:
 	from done_step1
 	assert(!((STEP_TYPE = 'REPLACE)))
-	assert((STEP_TYPE = 'UPDATE))
-	assert((UPDATE_TYPE = 'nil))
-	assert((UPDATE_VAR = 'nil))
-	assert((EXPR = 'nil))
 	EXPR ^= tl(tl(tl(STEP)))
 	UPDATE_VAR ^= hd(tl(tl(STEP)))
 	UPDATE_TYPE ^= hd(tl(STEP))
@@ -1002,12 +959,9 @@ done_come_from1:
 do_from:
 	from done_come_from1
 	PREV_LABEL ^= tl(COMES)
-	assert((PREV_LABEL = tl(COMES)))
-	assert((COMES_TYPE = 'FROM))
 	goto do_come_from1
 
 done_fi:
 	from done_come_from1
-	assert((EXPR = 'nil))
 	EXPR ^= hd(tl(COMES))
 	goto do_fi4
