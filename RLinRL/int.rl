@@ -869,13 +869,13 @@ goto done_step
 do_assert:
 from do_step1
   // TODO: implement assert
-  assert(!'not_implemented)
+  //assert(!'assert_not_implemented)
 goto done_step1
 
 do_replace:
 from do_step2
   // TODO: implement replace
-  assert(!'not_implemented)
+  assert(!'replace_not_implemented)
 goto done_step2
 
 do_update:
